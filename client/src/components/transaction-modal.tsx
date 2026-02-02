@@ -1,30 +1,30 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import { Textarea } from "./ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTransactionSchema } from "@shared/schema";
-import { useTransactions, useCreateTransaction } from "@/hooks/use-transactions";
+import { useCreateTransaction } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
 import { usePaymentMethods } from "@/hooks/use-payment-methods";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Upload, ScanLine } from "lucide-react";
+import { Loader2, Upload, ScanLine, CheckCircle2 } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "./ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 
-// Extend schema to accept strings for select fields (which we parse to numbers)
+// FIX 1: Robust Schema for String-to-Number Coercion
 const formSchema = insertTransactionSchema.extend({
-  amount: z.coerce.string(), // Handle numeric string input
-  categoryId: z.coerce.number(),
-  paymentMethodId: z.coerce.number(),
+  amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, "Amount must be a positive number"),
+  categoryId: z.string().min(1, "Category is required"), 
+  paymentMethodId: z.string().min(1, "Payment method is required"),
 });
 
 export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -45,8 +45,8 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       amount: "",
       description: "",
       date: new Date().toISOString().split('T')[0],
-      categoryId: undefined,
-      paymentMethodId: undefined,
+      categoryId: "",      // Changed from 0
+      paymentMethodId: "", // Changed from 0
       notes: "",
       receiptUrl: "",
       isSplit: false,
@@ -62,61 +62,127 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       
       try {
         setIsUploading(true);
+        setIsScanning(true);
+
+        // 1. Upload to Supabase (for storage record)
         const fileName = `${user?.id}/${Date.now()}-${file.name}`;
-        const { data, error } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('transaction-attachments')
           .upload(fileName, file);
 
-        if (error) throw error;
+        if (uploadError) throw uploadError;
         
         const { data: { publicUrl } } = supabase.storage
           .from('transaction-attachments')
           .getPublicUrl(fileName);
         
         form.setValue("receiptUrl", publicUrl);
-        toast({ title: "Receipt uploaded", description: "Image attached successfully" });
 
-        // Trigger OCR Webhook
-        if (import.meta.env.VITE_N8N_OCR_WEBHOOK) {
-          setIsScanning(true);
-          try {
-            const response = await fetch(import.meta.env.VITE_N8N_OCR_WEBHOOK, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: user?.id, file_url: publicUrl })
-            });
+        // 2. Trigger n8n Webhook (Direct File Upload)
+        // Using the URL provided in your prompt
+        const WEBHOOK_URL = "https://n8n.autoable.cloud/webhook/process-invoice"; 
+        
+        const formData = new FormData();
+        formData.append('data', file); // Matches -F "data=@..."
+        formData.append('user_id', user?.id || '');
+
+        const response = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          body: formData, // Browser automatically sets multipart/form-data header
+        });
+        
+        if (response.ok) {
+          const res = await response.json();
+          // Expected format: { "success": true, "data": { "total": 22324, "category": "...", ... } }
+          
+          if (res.success && res.data) {
+            const extracted = res.data;
+
+            // -- Auto-fill Logic --
             
-            if (response.ok) {
-              const ocrData = await response.json();
-              if (ocrData.amount) form.setValue("amount", String(ocrData.amount));
-              if (ocrData.date) form.setValue("date", ocrData.date);
-              if (ocrData.merchant) form.setValue("description", ocrData.merchant);
-              toast({ title: "Receipt Scanned", description: "Data extracted automatically!" });
+            // Amount
+            if (extracted.total) {
+              form.setValue("amount", String(extracted.total));
             }
-          } catch (e) {
-            console.error("OCR Failed", e);
-          } finally {
-            setIsScanning(false);
+
+            // Description / Merchant
+            if (extracted.description) {
+              form.setValue("description", extracted.description);
+            }
+
+            // Notes
+            if (extracted.notes) {
+              form.setValue("notes", extracted.notes);
+            }
+
+            // Category Mapping (String -> ID)
+            if (extracted.category && categories) {
+              // Find category ignoring case
+              const matchedCat = categories.find(c => 
+                c.name.toLowerCase().includes(extracted.category.toLowerCase()) || 
+                extracted.category.toLowerCase().includes(c.name.toLowerCase())
+              );
+              if (matchedCat) {
+                form.setValue("categoryId", matchedCat.id.toString());
+                // Also switch tab if category type doesn't match current tab
+                if (matchedCat.type !== activeTab) {
+                  setActiveTab(matchedCat.type);
+                  form.setValue("type", matchedCat.type);
+                }
+              }
+            }
+
+            // Payment Method Mapping (String -> ID)
+            if (extracted.payment_method && paymentMethods) {
+              const matchedPm = paymentMethods.find(pm => 
+                pm.name.toLowerCase().includes(extracted.payment_method.toLowerCase()) ||
+                extracted.payment_method.toLowerCase().includes(pm.name.toLowerCase())
+              );
+              if (matchedPm) {
+                form.setValue("paymentMethodId", matchedPm.id.toString());
+              }
+            }
+
+            toast({ 
+              title: "Receipt Scanned!", 
+              description: `Found: ${extracted.description} (${extracted.total})`,
+            });
           }
+        } else {
+          console.error("Webhook error:", await response.text());
+          toast({ title: "Scan warning", description: "Uploaded, but auto-fill failed.", variant: "destructive" });
         }
 
       } catch (e: any) {
+        console.error(e);
         toast({ title: "Upload failed", description: e.message, variant: "destructive" });
       } finally {
         setIsUploading(false);
+        setIsScanning(false);
       }
     }
   });
 
   const onSubmit = (data: any) => {
-    createTx.mutate({
+    // Ensure numeric fields are actually numbers before sending to mutation
+    const payload = {
       ...data,
+      amount: data.amount, // Schema handles string validation
+      categoryId: data.categoryId, 
+      paymentMethodId: data.paymentMethodId,
       userId: user?.id,
       type: activeTab
-    }, {
+    };
+
+    createTx.mutate(payload, {
       onSuccess: () => {
         onOpenChange(false);
-        form.reset();
+        form.reset({
+           amount: "", description: "", notes: "", receiptUrl: "", categoryId: "", paymentMethodId: "" 
+        });
+      },
+      onError: (err) => {
+        toast({ title: "Error", description: err.message, variant: "destructive" });
       }
     });
   };
@@ -139,23 +205,31 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               
               {/* Receipt Upload Dropzone */}
-              <div {...getRootProps()} className="border-2 border-dashed border-border hover:border-primary/50 transition-colors rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer bg-muted/20">
+              <div {...getRootProps()} className={`border-2 border-dashed transition-all rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer ${isScanning ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/50 bg-muted/20'}`}>
                 <input {...getInputProps()} />
-                {isUploading ? (
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                {isUploading || isScanning ? (
+                  <div className="flex flex-col items-center animate-pulse">
+                    <ScanLine className="h-10 w-10 text-primary mb-2" />
+                    <p className="text-sm font-medium text-primary">Scanning Receipt...</p>
+                    <p className="text-xs text-muted-foreground">Extracting details via AI</p>
+                  </div>
                 ) : form.getValues("receiptUrl") ? (
-                  <div className="relative w-full">
-                    <img src={form.getValues("receiptUrl") || ""} alt="Receipt" className="h-32 object-contain mx-auto rounded-md" />
-                    <div className="absolute top-0 right-0 bg-background/80 rounded-full p-1 text-xs">Tap to replace</div>
+                  <div className="relative w-full group">
+                    <img src={form.getValues("receiptUrl") || ""} alt="Receipt" className="h-32 object-contain mx-auto rounded-md shadow-sm" />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                      <p className="text-white text-xs font-medium">Click to replace</p>
+                    </div>
+                    <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                    </div>
                   </div>
                 ) : (
                   <>
                     <Upload className="h-8 w-8 text-muted-foreground mb-2" />
                     <p className="text-sm font-medium">Drop receipt to scan</p>
-                    <p className="text-xs text-muted-foreground mt-1">Supports automated OCR extraction</p>
+                    <p className="text-xs text-muted-foreground mt-1">Supports automated AI extraction</p>
                   </>
                 )}
-                {isScanning && <div className="mt-2 text-xs text-primary flex items-center"><ScanLine className="w-3 h-3 mr-1 animate-pulse" /> Scanning receipt...</div>}
               </div>
 
               <FormField
@@ -167,7 +241,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                     <FormControl>
                       <div className="relative">
                         <span className="absolute left-3 top-3 text-muted-foreground font-medium">Rp</span>
-                        <Input placeholder="0.00" className="pl-10 text-lg font-medium" {...field} type="number" />
+                        <Input placeholder="0" className="pl-10 text-lg font-medium" {...field} type="number" />
                       </div>
                     </FormControl>
                     <FormMessage />
@@ -182,7 +256,10 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value?.toString()}>
+                      <Select 
+                        onValueChange={field.onChange} // <--- REMOVED Number() wrapper
+                        value={field.value}            // <--- No need for .toString() if default is ""
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select category" />
@@ -190,7 +267,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                         </FormControl>
                         <SelectContent>
                           {categories?.filter(c => c.type === activeTab).map(c => (
-                            <SelectItem key={c.id} value={c.id.toString()}>
+                            <SelectItem key={c.id} value={c.id.toString()}> {/* Ensure c.id is treated as string */}
                               <span className="flex items-center gap-2">
                                 <span>{c.icon}</span> {c.name}
                               </span>
@@ -238,7 +315,10 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Payment Method</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value?.toString()}>
+                    <Select 
+                      onValueChange={field.onChange} // <--- REMOVED Number() wrapper
+                      value={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Paid via..." />
@@ -273,7 +353,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                 <Button 
                   type="submit" 
                   className="w-full h-12 text-base font-bold bg-primary text-primary-foreground hover:bg-primary/90"
-                  disabled={createTx.isPending || isUploading}
+                  disabled={createTx.isPending || isUploading || isScanning}
                 >
                   {createTx.isPending ? <Loader2 className="animate-spin mr-2" /> : null}
                   Save Transaction
