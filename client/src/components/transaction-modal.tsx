@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertTransactionSchema } from "@shared/schema";
+import { insertTransactionSchema, transactions } from "@shared/schema";
 import { useCreateTransaction } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
 import { usePaymentMethods } from "@/hooks/use-payment-methods";
@@ -21,11 +21,14 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { z } from "zod";
 
 // FIX 1: Robust Schema for String-to-Number Coercion
-const formSchema = insertTransactionSchema.extend({
-  amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, "Amount must be a positive number"),
-  categoryId: z.string().min(1, "Category is required"), 
-  paymentMethodId: z.string().min(1, "Payment method is required"),
-});
+const formSchema = insertTransactionSchema
+  .omit({ userId: true }) // <--- This tells the form "Don't validate userId, I'll handle it"
+  .extend({
+    amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, "Amount must be a positive number"),
+    transactionDate: z.coerce.date(),
+    categoryId: z.string().min(1, "Category is required"), 
+    paymentMethodId: z.string().min(1, "Payment method is required"),
+  });
 
 export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { user } = useAuth();
@@ -44,7 +47,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       type: "expense",
       amount: "",
       description: "",
-      date: new Date().toISOString().split('T')[0],
+      transactionDate: new Date().toISOString().split('T')[0],
       categoryId: "",      // Changed from 0
       paymentMethodId: "", // Changed from 0
       notes: "",
@@ -164,15 +167,18 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
   });
 
   const onSubmit = (data: any) => {
+    const { receiptUrl, ...rest } = data;
     // Ensure numeric fields are actually numbers before sending to mutation
     const payload = {
-      ...data,
+      ...rest,
       amount: data.amount, // Schema handles string validation
       categoryId: data.categoryId, 
       paymentMethodId: data.paymentMethodId,
       userId: user?.id,
-      type: activeTab
+      type: activeTab,
+      transactionDate: new Date(data.date || data.transactionDate)
     };
+    console.log("Payload being sent:", payload);
 
     createTx.mutate(payload, {
       onSuccess: () => {
@@ -282,7 +288,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
 
                 <FormField
                   control={form.control}
-                  name="date"
+                  name="transactionDate"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Date</FormLabel>
@@ -355,6 +361,13 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                   className="w-full h-12 text-base font-bold bg-primary text-primary-foreground hover:bg-primary/90"
                   disabled={createTx.isPending || isUploading || isScanning}
                 >
+                  {/* DEBUGGING: This will verify if there are errors blocking the submit */}
+{Object.keys(form.formState.errors).length > 0 && (
+  <div className="p-3 mb-4 text-sm text-red-500 bg-red-50 rounded-md">
+    <p className="font-bold">Form Errors:</p>
+    <pre>{JSON.stringify(form.formState.errors, null, 2)}</pre>
+  </div>
+)}
                   {createTx.isPending ? <Loader2 className="animate-spin mr-2" /> : null}
                   Save Transaction
                 </Button>

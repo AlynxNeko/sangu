@@ -43,7 +43,7 @@ export const transactions = pgTable("transactions", {
   categoryId: integer("category_id").references(() => categories.id),
   paymentMethodId: integer("payment_method_id").references(() => paymentMethods.id),
   description: text("description").notNull(),
-  date: date("date").notNull(),
+  transactionDate: timestamp("transaction_date").notNull().defaultNow(),
   receiptUrl: text("receipt_url"),
   notes: text("notes"),
   isSplit: boolean("is_split").default(false),
