@@ -1,0 +1,316 @@
+I need you to build a full-featured expense and income tracking web application. I already have the backend (Supabase) and automation workflows (N8N) set up and ready to use. Make sure of using Rupiah for the money!
+
+## Backend Ready (Already Set Up):
+
+### Supabase Database:
+- **URL**: yzpayjktewzxbsodgpwt.supabase.co
+- **Anon Key**: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6cGF5amt0ZXd6eGJzb2RncHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDAxMDI2OCwiZXhwIjoyMDg1NTg2MjY4fQ.dVdslRKY4BAY1cZfa0itlUpbhJvj2Nj2QCY66EH6M8U
+- Tables: user_profiles, transactions, categories, budgets, financial_goals, transaction_splits, recurring_transactions, income_split_rules, notifications, payment_methods, etc.
+- Authentication enabled
+- Storage bucket: `transaction-attachments`
+- Row Level Security (RLS) enabled
+
+### N8N Webhooks Ready:
+- Invoice OCR Webhook: https://srv1301701.hstgr.cloud/webhook-test/process-invoice
+- Salary Processing Webhook: leave it blank for now, haven't made it
+
+## Application Requirements:
+
+### 1. Authentication Pages
+- Login page with email/password
+- Sign up page with email/password
+- Password reset functionality
+- Use Supabase Auth
+
+### 2. Main Dashboard
+Display these key metrics:
+- Available Balance (total income - total expenses)
+- Monthly Income (sum of all income this month)
+- Monthly Expenses (sum of all expenses this month)
+- Savings Rate percentage
+
+Charts needed:
+- Bar chart: Income vs Expenses (can choose interval)
+- Pie chart: Spending by Category (can choose interval)
+- Line chart: Balance over time
+
+Include:
+- Budget overview cards showing category budgets with progress bars
+- Financial goals cards showing progress towards goals
+- Quick action button to add new transaction
+
+### 3. Transactions Page
+Features:
+- List all transactions (income and expense) with infinite scroll or pagination
+- Each transaction shows: icon, description, category, amount, date, payment method
+- Search transactions by description
+- Filter by:
+  - Type (income/expense)
+  - Category
+  - Date range
+  - Payment method
+- Sort by date, amount
+- Edit and delete transactions
+- Mark if transaction is split with others
+
+### 4. Add Transaction Modal/Page
+Form fields:
+- Transaction type (toggle between Income/Expense)
+- Amount (number input with currency symbol)
+- Category (dropdown - fetch from Supabase categories table)
+- Payment method (dropdown - fetch from payment_methods table)
+- Description (text input)
+- Date (date picker, default to today)
+- Notes (optional textarea)
+- Photo upload for receipt/invoice (upload to Supabase Storage, then call N8N webhook for OCR)
+- Checkbox: "Split this expense with others"
+
+If split is checked, show:
+- Add participants (name, email, amount or percentage)
+- Calculate split amounts
+- Save to transaction_splits table
+
+### 5. Budgets Page
+Features:
+- List all budgets with progress bars
+- Show: category name, spent amount, budget limit, percentage used
+- Color code: green (<80%), yellow (80-100%), red (>100%)
+- Add new budget button
+- Edit/delete existing budgets
+- Budget form: category, amount, period (daily/weekly/monthly/yearly), alert threshold
+
+### 6. Financial Goals Page
+Features:
+- Display all goals as cards
+- Show: goal name, current amount, target amount, progress bar, percentage
+- Add new goal button
+- Link transactions to goals (contribute to goal)
+- Goal form: name, description, target amount, target date, category (optional)
+
+### 7. Split Bills Page
+Features:
+- List all transactions that are split
+- Show: description, total amount, participants, who owes who
+- Mark splits as paid
+- Send reminders to participants
+- View split history
+
+### 8. Income Split Rules Page
+Features:
+- Create rules for automatic income allocation
+- Example: 20% to Savings, 10% to Emergency Fund, 70% to Daily Expenses
+- When income is added, automatically allocate based on active rule
+- Form: rule name, add allocations (category, percentage)
+- Toggle rule active/inactive
+
+### 9. Recurring Transactions Page
+Features:
+- List all recurring transactions
+- Show: description, amount, frequency, next occurrence
+- Add new recurring transaction
+- Edit/delete recurring transactions
+- Toggle active/inactive
+- Frequencies: daily, weekly, biweekly, monthly, quarterly, yearly
+
+### 10. Categories Management
+Features:
+- List all categories (grouped by income/expense)
+- Add custom categories
+- Edit/delete categories (except default ones)
+- Category form: name, type (income/expense), icon/emoji, color
+
+### 11. Payment Methods Page
+Features:
+- List all payment methods
+- Add new: name, type (cash, credit card, debit card, e-wallet, bank transfer)
+- Edit/delete payment methods
+- Toggle active/inactive
+
+### 12. Notifications Center
+Features:
+- List all notifications (fetch from notifications table)
+- Mark as read/unread
+- Types: budget alerts, goal achieved, split payment reminders, recurring reminders
+- Click notification to navigate to relevant page
+
+### 13. Settings Page
+Features:
+- User profile: name, email, avatar
+- Default currency selection
+- Theme toggle (light/dark)
+- Export data (CSV/JSON)
+- Delete account
+
+### 14. Reports Page (Optional but Nice)
+Features:
+- Monthly summary report
+- Spending trends
+- Category breakdown
+- Export as PDF
+
+## Technical Requirements:
+
+### Supabase Integration:
+```javascript
+// Initialize Supabase client
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+)
+
+// Example: Fetch transactions
+const { data, error } = await supabase
+  .from('transactions')
+  .select('*, categories(*), payment_methods(*)')
+  .eq('user_id', user.id)
+  .order('transaction_date', { ascending: false })
+
+// Example: Add transaction
+const { data, error } = await supabase
+  .from('transactions')
+  .insert({
+    user_id: user.id,
+    type: 'expense',
+    amount: 50.00,
+    category_id: categoryId,
+    description: 'Lunch'
+  })
+
+// Example: Upload receipt
+const { data, error } = await supabase.storage
+  .from('transaction-attachments')
+  .upload(`${user.id}/${fileName}`, file)
+```
+
+### N8N Webhook Integration:
+```javascript
+// After uploading receipt, call OCR webhook
+const response = await fetch(N8N_OCR_WEBHOOK_URL, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    user_id: user.id,
+    transaction_id: transactionId,
+    file_url: fileUrl,
+    file_type: file.type
+  })
+})
+
+const ocrData = await response.json()
+// Use ocrData to pre-fill transaction form
+```
+
+### Authentication Flow:
+```javascript
+// Sign up
+const { data, error } = await supabase.auth.signUp({
+  email: email,
+  password: password
+})
+
+// Sign in
+const { data, error } = await supabase.auth.signInWithPassword({
+  email: email,
+  password: password
+})
+
+// Get current user
+const { data: { user } } = await supabase.auth.getUser()
+
+// Sign out
+const { error } = await supabase.auth.signOut()
+```
+
+## Design Requirements:
+
+### Style:
+- Modern, clean design
+- Dark theme preferred (or toggle between light/dark)
+- Use beautiful color gradients for accents
+- Smooth animations and transitions
+- Responsive design (mobile, tablet, desktop)
+
+### Colors Suggested:
+- Primary (Yellow)	#F5F749	Your core brand color. Used for headings and primary buttons.
+- Secondary (Gold)	#D9BC00	A slightly deeper yellow for hover states and secondary icons.
+- Accent (Cyan)	#4ECDC4	Retained from your previous set to provide high-contrast "pop."
+- Neutral Dark	#0a0a0a	Deepest background for dark mode.
+- Neutral Light	#F8F9FA	Off-white for light mode background.
+
+### Typography:
+- Use modern, readable fonts
+- Monospace for numbers/amounts (like Space Mono)
+- Sans-serif for body text (like Sora, Inter, or similar)
+
+### Components:
+- Beautiful cards with subtle shadows and borders
+- Gradient buttons with hover effects
+- Smooth progress bars for budgets and goals
+- Interactive charts (use Recharts or Chart.js)
+- Loading states for async operations
+- Toast notifications for success/error messages
+- Modal dialogs for forms
+
+### Icons:
+- Use Lucide React or similar icon library
+- Consistent icon style throughout
+
+## Important Notes:
+
+1. **Row Level Security**: All Supabase queries automatically filter by authenticated user due to RLS policies - you don't need to manually filter by user_id in SELECT queries
+2. **Real-time Updates**: Consider using Supabase real-time subscriptions for live updates
+3. **Error Handling**: Show user-friendly error messages
+4. **Loading States**: Show skeletons or spinners while data loads
+5. **Form Validation**: Validate all inputs before submission
+6. **Responsive**: Must work perfectly on mobile devices
+7. **Performance**: Optimize queries, use pagination for large lists
+8. **Accessibility**: Follow WCAG guidelines
+
+## Database Tables You'll Use:
+
+Main tables (with RLS enabled):
+- `user_profiles` - user info
+- `transactions` - all income/expenses
+- `categories` - transaction categories
+- `budgets` - budget limits
+- `financial_goals` - savings goals
+- `transaction_splits` - split bill details
+- `split_participants` - people involved in splits
+- `recurring_transactions` - recurring entries
+- `income_split_rules` - auto allocation rules
+- `income_split_allocations` - allocation percentages
+- `payment_methods` - payment types
+- `notifications` - user notifications
+- `transaction_tags` - custom tags
+- `user_preferences` - user settings
+
+## Example User Flow:
+
+1. User signs up/logs in
+2. Sees dashboard with current financial status
+3. Takes photo of grocery receipt
+4. Clicks "Add Transaction"
+5. Uploads photo - AI extracts amount, date, vendor automatically
+6. User confirms details, selects category
+7. Optionally marks as split with roommate
+8. Saves transaction
+9. Dashboard updates showing new expense
+10. Budget alert shows if approaching limit
+11. User checks goals page - sees progress toward vacation fund
+
+## What I Need:
+
+Build this as a complete, production-ready React web application that I can deploy to my VPS. Make it beautiful, functional, and user-friendly. The backend is ready - you just need to connect to it and create an amazing user experience!
+
+## Environment Variables to Use:
+
+```
+VITE_SUPABASE_URL=[paste your URL]
+VITE_SUPABASE_ANON_KEY=[paste your key]
+VITE_N8N_OCR_WEBHOOK=[paste your webhook]
+VITE_N8N_SALARY_WEBHOOK=[paste your webhook]
+```
+
+Let's build something amazing! 🚀💰
