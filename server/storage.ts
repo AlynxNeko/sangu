@@ -1,35 +1,37 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { type UserProfile, type InsertUserProfile } from "@shared/schema";
 
-// modify the interface with any CRUD methods
-// you might need
+// Since we use Supabase, this internal storage interface is largely unused 
+// but kept for compatibility with the project structure templates.
+// The frontend communicates directly with Supabase.
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getUser(id: string): Promise<UserProfile | undefined>;
+  createUser(user: InsertUserProfile): Promise<UserProfile>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private users: Map<string, UserProfile>;
 
   constructor() {
     this.users = new Map();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
+  async getUser(id: string): Promise<UserProfile | undefined> {
     return this.users.get(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
+  async createUser(insertUser: InsertUserProfile): Promise<UserProfile> {
+    const id = insertUser.id || "uuid-placeholder"; // In reality, Supabase handles IDs
+    const user: UserProfile = { 
+      ...insertUser, 
+      id, 
+      createdAt: new Date(),
+      currency: "IDR",
+      theme: "dark",
+      email: insertUser.email || null,
+      fullName: insertUser.fullName || null,
+      avatarUrl: insertUser.avatarUrl || null
+    };
     this.users.set(id, user);
     return user;
   }

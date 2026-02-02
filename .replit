@@ -37,3 +37,10 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
+
+[userenv]
+
+[userenv.shared]
+VITE_SUPABASE_URL = "https://yzpayjktewzxbsodgpwt.supabase.co"
+VITE_N8N_OCR_WEBHOOK = "https://srv1301701.hstgr.cloud/webhook-test/process-invoice"
+VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6cGF5amt0ZXd6eGJzb2RncHd0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDAxMDI2OCwiZXhwIjoyMDg1NTg2MjY4fQ.dVdslRKY4BAY1cZfa0itlUpbhJvj2Nj2QCY66EH6M8U"
