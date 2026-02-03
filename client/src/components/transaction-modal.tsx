@@ -1,3 +1,5 @@
+// client/src/components/transaction-modal.tsx
+
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -136,16 +138,24 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
           const res = await response.json();
           if (res.success && res.data) {
             const extracted = res.data;
-            if (extracted.total) form.setValue("amount", String(extracted.total));
-            if (extracted.description) form.setValue("description", extracted.description);
-            if (extracted.notes) form.setValue("notes", extracted.notes);
+            
+            const setField = (field: any, value: any) => 
+              form.setValue(field, value, { shouldValidate: true, shouldDirty: true });
 
+            if (extracted.total) setField("amount", String(extracted.total));
+            if (extracted.description) setField("description", extracted.description);
+            if (extracted.notes) setField("notes", extracted.notes);
+
+            // Improved Bidirectional Matching for Categories
             if (extracted.category && categories) {
-              const matchedCat = categories.find(c => 
-                c.name.toLowerCase().includes(extracted.category.toLowerCase())
-              );
+              const lowerExtracted = extracted.category.toLowerCase();
+              const matchedCat = categories.find(c => {
+                const lowerName = c.name.toLowerCase();
+                return lowerName.includes(lowerExtracted) || lowerExtracted.includes(lowerName);
+              });
+              
               if (matchedCat) {
-                form.setValue("categoryId", matchedCat.id.toString());
+                setField("categoryId", matchedCat.id.toString());
                 if (matchedCat.type !== activeTab) {
                   setActiveTab(matchedCat.type);
                   form.setValue("type", matchedCat.type);
@@ -153,11 +163,15 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
               }
             }
 
+            // Improved Bidirectional Matching for Payment Methods
             if (extracted.payment_method && paymentMethods) {
-              const matchedPm = paymentMethods.find(pm => 
-                pm.name.toLowerCase().includes(extracted.payment_method.toLowerCase())
-              );
-              if (matchedPm) form.setValue("paymentMethodId", matchedPm.id.toString());
+              const lowerExtracted = extracted.payment_method.toLowerCase();
+              const matchedPm = paymentMethods.find(pm => {
+                const lowerName = pm.name.toLowerCase();
+                return lowerName.includes(lowerExtracted) || lowerExtracted.includes(lowerName);
+              });
+              
+              if (matchedPm) setField("paymentMethodId", matchedPm.id.toString());
             }
 
             toast({ title: "Receipt Scanned!", description: `Found: ${extracted.description} (${extracted.total})` });
