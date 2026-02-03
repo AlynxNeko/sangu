@@ -15,6 +15,7 @@ import { Button } from "./ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "./ui/sheet";
 import { cn } from "@/lib/utils";
 import { TransactionModal } from "./transaction-modal";
+import { Repeat } from "lucide-react";
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -25,6 +26,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/transactions", label: "Transactions", icon: WalletCards },
+    { href: "/recurring", label: "Recurring", icon: Repeat },
     { href: "/analytics", label: "Analytics", icon: PieChart },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
@@ -37,9 +39,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       <aside className="hidden lg:flex flex-col w-72 border-r border-border/50 bg-card/30 backdrop-blur-xl p-6 fixed h-full z-30">
         <div className="flex items-center gap-3 mb-12">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
-            <span className="text-xl font-bold text-black">P</span>
+            <span className="text-xl font-bold text-black">S</span>
           </div>
-          <h1 className="text-2xl font-bold font-display tracking-tight">Prospera</h1>
+          <h1 className="text-2xl font-bold font-display tracking-tight">Sangu</h1>
         </div>
 
         <nav className="flex-1 space-y-2">
@@ -83,9 +85,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       <div className="lg:hidden fixed top-0 left-0 right-0 h-16 bg-background/80 backdrop-blur-md border-b border-white/5 z-40 px-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-            <span className="font-bold text-black text-sm">P</span>
+            <span className="font-bold text-black text-sm">S</span>
           </div>
-          <span className="font-bold font-display text-lg">Prospera</span>
+          <span className="font-bold font-display text-lg">Sangu</span>
         </div>
         
         <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
@@ -98,9 +100,9 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             <div className="flex flex-col h-full">
               <div className="flex items-center gap-3 mb-8">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center">
-                  <span className="text-xl font-bold text-black">P</span>
+                  <span className="text-xl font-bold text-black">S</span>
                 </div>
-                <h1 className="text-2xl font-bold font-display">Prospera</h1>
+                <h1 className="text-2xl font-bold font-display">Sangu</h1>
               </div>
 
               <nav className="space-y-2 flex-1">

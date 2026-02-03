@@ -156,7 +156,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <p className="font-medium leading-none group-hover:text-primary transition-colors">{tx.description}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{format(new Date(tx.date), "dd MMM yyyy")}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{format(new Date(tx.transaction_date), "dd MMM yyyy")}</p>
                     </div>
                   </div>
                   <div className={`font-bold ${tx.type === 'income' ? 'text-primary' : 'text-foreground'}`}>

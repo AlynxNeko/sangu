@@ -14,7 +14,7 @@ export function useTransactions() {
           category:categories(name, color, icon),
           payment_method:payment_methods(name)
         `)
-        .order('date', { ascending: false });
+        .order('transaction_date', { ascending: false }); // Fixed: 'date' -> 'transaction_date'
       
       if (error) throw error;
       return data;
@@ -55,7 +55,7 @@ export function useCreateTransaction() {
         category_id: transaction.categoryId,
         payment_method_id: transaction.paymentMethodId,
         description: transaction.description,
-        date: transaction.date,
+        transaction_date: transaction.transactionDate, // Fixed: 'date' -> 'transaction_date' & 'transaction.date' -> 'transaction.transactionDate'
         receipt_url: transaction.receiptUrl,
         notes: transaction.notes,
         is_split: transaction.isSplit,
@@ -122,7 +122,7 @@ export function useDashboardStats() {
       const { data: transactions, error } = await supabase
         .from('transactions')
         .select('amount, type')
-        .gte('date', firstDay);
+        .gte('transaction_date', firstDay); // Fixed: 'date' -> 'transaction_date'
 
       if (error) throw error;
 
@@ -143,6 +143,46 @@ export function useDashboardStats() {
         balance,
         savingsRate
       };
+    }
+  });
+}
+
+export function useCreateRecurringTransaction() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: any) => {
+      // Map frontend data to Supabase columns
+      const payload = {
+        user_id: data.userId,
+        type: data.type,
+        amount: data.amount,
+        category_id: data.categoryId,
+        payment_method_id: data.paymentMethodId,
+        description: data.description,
+        frequency: data.frequency, // e.g., 'monthly', 'weekly'
+        start_date: data.startDate,
+        next_occurrence: data.startDate, // First run is the start date
+        auto_create: true, // This tells n8n to process it
+        is_active: true
+      };
+
+      const { data: result, error } = await supabase
+        .from('recurring_transactions')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recurring_transactions'] });
+      toast({ title: "Recurring Scheduled", description: "Automation set up successfully." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   });
 }

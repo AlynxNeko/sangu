@@ -94,7 +94,7 @@ export default function Transactions() {
                 <div>
                   <h3 className="font-bold text-lg leading-none mb-1">{tx.description}</h3>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <span>{format(new Date(tx.date), "dd MMM yyyy")}</span>
+                    <span>{format(new Date(tx.transaction_date), "dd MMM yyyy")}</span>
                     <span>•</span>
                     <span className="bg-white/5 px-2 py-0.5 rounded text-xs">{tx.category?.name || 'Uncategorized'}</span>
                     {tx.payment_method && (
