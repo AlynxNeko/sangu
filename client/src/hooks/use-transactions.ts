@@ -49,13 +49,6 @@ export function useRecentTransactions(limit = 5) {
   });
 }
 
-interface CreateTransactionPayload extends InsertTransaction {
-  splitDetails?: {
-    totalAmount: number;
-    participants: { name: string; amount: number }[];
-  };
-}
-
 export function useCreateTransaction() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -85,7 +78,6 @@ export function useCreateTransaction() {
       if (txError) throw txError;
 
       // 2. If Split, Insert Split Details
-      // FIX: Check if splitDetails exists properly
       if (transaction.isSplit && transaction.splitDetails) {
         console.log("Processing split:", transaction.splitDetails);
         
@@ -94,7 +86,6 @@ export function useCreateTransaction() {
           .from('transaction_splits')
           .insert({
             transaction_id: txData.id,
-            // FIX: Safe string conversion for totalAmount
             total_amount: String(transaction.splitDetails.totalAmount || 0), 
           })
           .select()
@@ -107,7 +98,6 @@ export function useCreateTransaction() {
           const participantsPayload = transaction.splitDetails.participants.map(p => ({
             split_id: splitData.id,
             name: p.name,
-            // FIX: Safe string conversion for amount
             amount_owed: String(p.amount || 0),
             is_paid: false
           }));
@@ -126,6 +116,7 @@ export function useCreateTransaction() {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['splits'] });
+      queryClient.invalidateQueries({ queryKey: ['budgets'] }); 
       toast({
         title: "Transaction Saved",
         description: "Transaction and split details recorded.",
@@ -171,7 +162,7 @@ export function useDeleteTransaction() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (id: string) => { // Changed ID to string (UUID)
+    mutationFn: async (id: string) => { 
     const { error } = await supabase
         .from('transactions')
         .delete()
@@ -219,8 +210,7 @@ export function useDashboardStats() {
       const balance = income - expenses;
       const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
 
-      // 3. Generate Chart Data (Daily aggregation for current month)
-      // Get all days in the current month so far (or last 30 days if you prefer)
+      // 3. Generate Chart Data
       const days = eachDayOfInterval({ start, end: now });
 
       const chartData = days.map(day => {
@@ -230,7 +220,7 @@ export function useDashboardStats() {
         );
 
         return {
-          name: format(day, 'd MMM'), // e.g. "4 Feb"
+          name: format(day, 'd MMM'), 
           fullDate: dateStr,
           income: dayTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0),
           expense: dayTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0),
@@ -248,7 +238,7 @@ export function useDashboardStats() {
   });
 }
 
-// --- NEW HOOKS FOR BUDGETS ---
+// --- BUDGETS PROGRESS ---
 
 export function useBudgetsProgress() {
   return useQuery({
@@ -294,7 +284,7 @@ export function useBudgetsProgress() {
   });
 }
 
-// --- NEW HOOKS FOR INCOME ALLOCATION (SPLITTING) ---
+// --- INCOME ALLOCATION (SPLITTING) ---
 
 export function useIncomeRules() {
   return useQuery({
@@ -309,7 +299,8 @@ export function useIncomeRules() {
             category:categories(*)
           )
         `)
-        .order('id');
+        // FIX: Sort by created_at or name instead of id (UUID) to prevent random list jumping
+        .order('name', { ascending: true }); 
       if (error) throw error;
       return data;
     }
@@ -358,12 +349,14 @@ export function useToggleIncomeRule() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async ({ id, isActive }: { id: number, isActive: boolean }) => {
-      // First, set all to false if we are activating one
+    mutationFn: async ({ id, isActive }: { id: string | number, isActive: boolean }) => {
+      // First, set all to false if we are activating one (Radio Button behavior)
       if (isActive) {
-        await supabase.from('income_split_rules').update({ is_active: false }).neq('id', 0);
+        // Safe query compatible with both UUID and Integer IDs
+        await supabase.from('income_split_rules').update({ is_active: false }).not('id', 'is', null);
       }
       
+      // Then set the specific one
       const { error } = await supabase
         .from('income_split_rules')
         .update({ is_active: isActive })
@@ -391,10 +384,10 @@ export function useCreateRecurringTransaction() {
         category_id: data.categoryId,
         payment_method_id: data.paymentMethodId,
         description: data.description,
-        frequency: data.frequency, // e.g., 'monthly', 'weekly'
+        frequency: data.frequency, 
         start_date: data.startDate,
-        next_occurrence: data.startDate, // First run is the start date
-        auto_create: true, // This tells n8n to process it
+        next_occurrence: data.startDate, 
+        auto_create: true, 
         is_active: true
       };
 
@@ -416,4 +409,3 @@ export function useCreateRecurringTransaction() {
     }
   });
 }
-

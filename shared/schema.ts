@@ -2,9 +2,6 @@ import { pgTable, text, serial, integer, boolean, timestamp, numeric, date, uuid
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// We are mirroring the Supabase schema here for type safety in the frontend.
-// Note: In Supabase, 'id' might be uuid, but we'll define what we expect.
-
 export const userProfiles = pgTable("user_profiles", {
   id: uuid("id").primaryKey(), 
   email: text("email"),
@@ -16,7 +13,7 @@ export const userProfiles = pgTable("user_profiles", {
 });
 
 export const categories = pgTable("categories", {
-  id: serial("id").primaryKey(), // Categories can stay serial or change to uuid if you prefer
+  id: serial("id").primaryKey(),
   userId: uuid("user_id"), 
   name: text("name").notNull(),
   type: text("type").notNull(),
@@ -35,7 +32,6 @@ export const paymentMethods = pgTable("payment_methods", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// FIX: Changed id to uuid to match your DB
 export const transactions = pgTable("transactions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
@@ -56,8 +52,8 @@ export const budgets = pgTable("budgets", {
   userId: uuid("user_id").notNull(),
   categoryId: integer("category_id").references(() => categories.id),
   amount: numeric("amount").notNull(),
-  period: text("period").notNull(), // 'daily', 'weekly', 'monthly', 'yearly'
-  alertThreshold: integer("alert_threshold").default(80), // Percentage
+  period: text("period").notNull(),
+  alertThreshold: integer("alert_threshold").default(80),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -72,7 +68,6 @@ export const financialGoals = pgTable("financial_goals", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// FIX: Updated to uuid and numeric handling
 export const transactionSplits = pgTable("transaction_splits", {
   id: uuid("id").primaryKey().defaultRandom(),
   transactionId: uuid("transaction_id").references(() => transactions.id),
@@ -95,21 +90,22 @@ export const recurringTransactions = pgTable("recurring_transactions", {
   description: text("description").notNull(),
   amount: numeric("amount").notNull(),
   type: text("type").notNull(),
-  frequency: text("frequency").notNull(), // 'daily', 'weekly', 'monthly', etc.
+  frequency: text("frequency").notNull(),
   nextOccurrence: date("next_occurrence").notNull(),
   isActive: boolean("is_active").default(true),
 });
 
+// FIX: Updated id to uuid to match the database
 export const incomeSplitRules = pgTable("income_split_rules", {
-  id: serial("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
   name: text("name").notNull(),
   isActive: boolean("is_active").default(true),
 });
 
 export const incomeSplitAllocations = pgTable("income_split_allocations", {
-  id: serial("id").primaryKey(),
-  ruleId: integer("rule_id").references(() => incomeSplitRules.id),
+  id: uuid("id").primaryKey().defaultRandom(), // Updated to uuid as likely
+  ruleId: uuid("rule_id").references(() => incomeSplitRules.id), // Updated reference
   categoryId: integer("category_id").references(() => categories.id),
   percentage: numeric("percentage").notNull(),
 });

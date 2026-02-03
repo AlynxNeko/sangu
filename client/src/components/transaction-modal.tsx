@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTransactionSchema } from "@shared/schema";
-import { useCreateRecurringTransaction, useCreateTransaction } from "@/hooks/use-transactions";
+import { useCreateRecurringTransaction, useCreateTransaction, useBudgetsProgress } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
 import { usePaymentMethods } from "@/hooks/use-payment-methods";
 import { useAuth } from "@/hooks/use-auth";
@@ -20,10 +20,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
 import { Switch } from "@/components/ui/switch"; 
-import { Checkbox } from "@/components/ui/checkbox"; // Changed from radix to ui component for consistency
+import { Checkbox } from "@/components/ui/checkbox"; 
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-// FIX 1: Robust Schema for String-to-Number Coercion
+// Robust Schema for String-to-Number Coercion
 const formSchema = insertTransactionSchema
   .omit({ userId: true })
   .extend({
@@ -47,6 +47,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
   // Hooks
   const createTx = useCreateTransaction();
   const createRecurring = useCreateRecurringTransaction(); 
+  const { data: budgetProgress } = useBudgetsProgress(); // Fetch budgets
   
   const { data: categories } = useCategories();
   const { data: paymentMethods } = usePaymentMethods();
@@ -88,9 +89,6 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
 
   const friendsTotal = participants.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   
-  // Logic: 
-  // If Mode = "total" (User enters 150k), My Share = 150k - Friends(100k) = 50k
-  // If Mode = "share" (User enters 50k), Total Bill = 50k + Friends(100k) = 150k
   const userShare = splitMode === "total" 
     ? Math.max(0, amountValue - friendsTotal)
     : amountValue;
@@ -110,7 +108,6 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
         setIsUploading(true);
         setIsScanning(true);
 
-        // 1. Upload to Supabase
         const fileName = `${user?.id}/${Date.now()}-${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from('transaction-attachments')
@@ -124,7 +121,6 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
         
         form.setValue("receiptUrl", publicUrl);
 
-        // 2. Trigger n8n Webhook
         const WEBHOOK_URL = "https://n8n.autoable.cloud/webhook/process-invoice"; 
         
         const formData = new FormData();
@@ -179,7 +175,6 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
     }
   });
 
-  // FIX 2: Correct onSubmit Logic Branching
   const onSubmit = (data: any) => {
     // Determine the final "expense" amount to record for the user
     const finalUserAmount = splitMode === "total" 
@@ -190,9 +185,31 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       toast({ title: "Invalid Amounts", description: "Friends' shares exceed the total bill!", variant: "destructive" });
       return;
     }
+
+    // === BUDGET LIMIT CHECK ===
+    if (activeTab === 'expense' && budgetProgress) {
+      const budget = budgetProgress.find(b => b.categoryId === Number(data.categoryId));
+      
+      if (budget) {
+        const currentSpent = Number(budget.spent);
+        const limit = Number(budget.amount);
+        // Calculate new total if this transaction is added
+        const newTotal = currentSpent + finalUserAmount;
+
+        if (newTotal > limit) {
+          const confirmOverBudget = window.confirm(
+            `⚠️ Budget Warning!\n\nThis transaction will exceed your budget for ${budget.category?.name}.\n\nBudget: Rp ${limit.toLocaleString()}\nTotal after this: Rp ${newTotal.toLocaleString()}\n\nDo you want to proceed?`
+          );
+          
+          if (!confirmOverBudget) {
+            return; // Cancel submission
+          }
+        }
+      }
+    }
+
     // 1. Common Data Preparation
     const basePayload = {
-      // amount: data.amount,
       categoryId: Number(data.categoryId),
       paymentMethodId: Number(data.paymentMethodId),
       description: data.description,
@@ -215,7 +232,6 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
 
     if (isRecurring) {
       // === BRANCH A: RECURRING TRANSACTION ===
-      // Check for required recurring fields
       if (!data.frequency || !data.startDate) {
         toast({ title: "Missing Fields", description: "Frequency and Start Date are required.", variant: "destructive" });
         return;
@@ -241,7 +257,6 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       // === BRANCH B: ONE-TIME TRANSACTION ===
       const transactionPayload = {
         ...basePayload,
-        // FIX: Change 'date' to 'transactionDate' to match the schema and hook expectation
         transactionDate: data.transactionDate.toISOString(), 
         isSplit: data.isSplit
       };
@@ -376,7 +391,6 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                     <FormItem>
                       <FormLabel>Date</FormLabel>
                       <FormControl>
-                        {/* Ensure value is formatted for date input YYYY-MM-DD */}
                         <Input 
                           type="date" 
                           {...field} 
