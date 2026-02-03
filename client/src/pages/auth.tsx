@@ -7,11 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
+type AuthMode = 'signin' | 'signup' | 'reset';
+
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
+  const [mode, setMode] = useState<AuthMode>('signin');
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -20,7 +22,14 @@ export default function AuthPage() {
     setIsLoading(true);
 
     try {
-      if (isSignUp) {
+      if (mode === 'reset') {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin,
+        });
+        if (error) throw error;
+        toast({ title: "Check your email", description: "Password reset link sent!" });
+        setMode('signin');
+      } else if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -63,9 +72,13 @@ export default function AuthPage() {
 
         <Card className="border-white/10 bg-card/60 backdrop-blur-xl shadow-2xl">
           <CardHeader>
-            <CardTitle className="text-2xl">{isSignUp ? "Create Account" : "Welcome Back"}</CardTitle>
+            <CardTitle className="text-2xl">
+              {mode === 'reset' ? "Reset Password" : (mode === 'signup' ? "Create Account" : "Welcome Back")}
+            </CardTitle>
             <CardDescription>
-              {isSignUp ? "Enter your details to get started" : "Sign in to access your dashboard"}
+              {mode === 'reset' 
+                ? "Enter your email to receive a reset link" 
+                : (mode === 'signup' ? "Enter your details to get started" : "Sign in to access your dashboard")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -80,34 +93,70 @@ export default function AuthPage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="bg-background/50 border-white/10 h-11"
-                  required
-                  minLength={6}
-                />
-              </div>
+              
+              {mode !== 'reset' && (
+                <div className="space-y-2">
+                  <Input
+                    type="password"
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="bg-background/50 border-white/10 h-11"
+                    required
+                    minLength={6}
+                  />
+                </div>
+              )}
 
               <Button 
                 type="submit" 
                 className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-base"
                 disabled={isLoading}
               >
-                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isSignUp ? "Sign Up" : "Sign In")}
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                  mode === 'reset' ? "Send Reset Link" : (mode === 'signup' ? "Sign Up" : "Sign In")
+                )}
               </Button>
 
-              <div className="text-center mt-4">
-                <button
-                  type="button"
-                  onClick={() => setIsSignUp(!isSignUp)}
-                  className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
-                >
-                  {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
-                </button>
+              <div className="flex flex-col gap-2 text-center mt-4">
+                {mode === 'signin' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setMode('signup')}
+                      className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                    >
+                      Don't have an account? Sign Up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode('reset')}
+                      className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                    >
+                      Forgot Password?
+                    </button>
+                  </>
+                )}
+                
+                {mode === 'signup' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('signin')}
+                    className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                  >
+                    Already have an account? Sign In
+                  </button>
+                )}
+
+                {mode === 'reset' && (
+                  <button
+                    type="button"
+                    onClick={() => setMode('signin')}
+                    className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                  >
+                    Back to Sign In
+                  </button>
+                )}
               </div>
             </form>
           </CardContent>

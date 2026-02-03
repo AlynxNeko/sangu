@@ -10,9 +10,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCategories, useCreateCategory } from "@/hooks/use-categories";
 import { usePaymentMethods, useCreatePaymentMethod } from "@/hooks/use-payment-methods";
 import { Loader2, Plus, Trash2, Wallet, Tag } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Settings() {
   const { user, signOut } = useAuth();
+  const [newPassword, setNewPassword] = useState("");
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const { toast } = useToast();
+
+  const handleUpdatePassword = async () => {
+    if (!newPassword) return;
+    setIsUpdatingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+      toast({ title: "Success", description: "Password updated successfully" });
+      setNewPassword("");
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-10">
@@ -40,6 +60,29 @@ export default function Settings() {
                 <Input value={user?.email} disabled className="bg-muted" />
               </div>
               <Button variant="destructive" onClick={() => signOut()}>Sign Out</Button>
+            </CardContent>
+          </Card>
+
+          <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Security</CardTitle>
+              <CardDescription>Update your password</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>New Password</Label>
+                <Input 
+                  type="password" 
+                  value={newPassword} 
+                  onChange={(e) => setNewPassword(e.target.value)} 
+                  placeholder="Enter new password"
+                  minLength={6}
+                />
+              </div>
+              <Button onClick={handleUpdatePassword} disabled={isUpdatingPassword || !newPassword}>
+                {isUpdatingPassword ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Update Password
+              </Button>
             </CardContent>
           </Card>
           
@@ -73,6 +116,7 @@ export default function Settings() {
   );
 }
 
+// ... (CategoryManager and PaymentMethodManager remain unchanged)
 function CategoryManager({ userId }: { userId: string | undefined }) {
   const { data: categories, isLoading } = useCategories();
   const createCategory = useCreateCategory();
