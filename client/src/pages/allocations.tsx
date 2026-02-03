@@ -148,21 +148,22 @@ export default function AllocationsPage() {
           <h2 className="text-xl font-bold">Your Rules</h2>
           {isLoading && <div className="text-muted-foreground">Loading rules...</div>}
           
-          {rules?.map((rule) => (
-            <Card key={rule.id} className={`transition-all ${rule.isActive ? 'border-primary bg-primary/5' : 'border-white/5'}`}>
+          {rules?.map((rule: any) => (
+            <Card key={rule.id} className={`transition-all ${rule.is_active ? 'border-primary bg-primary/5' : 'border-white/5'}`}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{rule.name}</CardTitle>
                   <div className="flex items-center gap-2">
                     <Label htmlFor={`rule-${rule.id}`} className="text-xs text-muted-foreground">
-                      {rule.isActive ? 'Active' : 'Inactive'}
+                        {/* FIX: Use rule.is_active instead of rule.isActive */}
+                        {rule.is_active ? 'Active' : 'Inactive'}
                     </Label>
                     <Switch 
-                      id={`rule-${rule.id}`} 
-                      checked={rule.isActive || false}
-                      onCheckedChange={(checked) => toggleRule.mutate({ id: rule.id, isActive: checked })} 
+                        id={`rule-${rule.id}`} 
+                        checked={rule.is_active || false} 
+                        onCheckedChange={(checked) => toggleRule.mutate({ id: rule.id, isActive: checked })} 
                     />
-                  </div>
+                    </div>
                 </div>
               </CardHeader>
               <CardContent>

@@ -1,283 +1,262 @@
-import { useDashboardStats, useRecentTransactions, useBudgetsProgress, useIncomeRules } from "@/hooks/use-transactions";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, CreditCard, PieChart as PieIcon, AlertCircle } from "lucide-react";
-import { motion } from "framer-motion";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useDashboardStats, useRecentTransactions, useBudgetsProgress, useIncomeRules } from "@/hooks/use-transactions";
+import { 
+  ArrowUpRight, 
+  ArrowDownRight, 
+  Wallet, 
+  TrendingUp,
+  Percent,
+  Split
+} from "lucide-react";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { format } from "date-fns";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import { Progress } from "@/components/ui/progress";
-import { useState } from "react";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
-  const { data: stats, isLoading: statsLoading } = useDashboardStats();
-  const { data: recentTx, isLoading: txLoading } = useRecentTransactions();
-  const { data: budgets, isLoading: budgetsLoading } = useBudgetsProgress();
+  const { data: stats, isLoading } = useDashboardStats();
+  const { data: recentTransactions } = useRecentTransactions();
+  const { data: budgets } = useBudgetsProgress();
   const { data: rules } = useIncomeRules();
-  
-  // State to toggle the Income Split Widget
-  const [showAllocation, setShowAllocation] = useState(true);
 
-  // Find active rule for the widget
-  const activeRule = rules?.find(r => r.isActive);
-  const allocationData = activeRule?.allocations?.map(a => ({
-    name: a.category?.name || 'Unknown',
-    value: Number(a.percentage),
-    color: a.category?.color || '#8884d8'
-  })) || [];
+  // Find the currently active rule
+  const activeRule = rules?.find(r => r.is_active);
 
-  const formatCurrency = (val: number) => 
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-
-  if (statsLoading) {
-    return <DashboardSkeleton />;
+  if (isLoading) {
+    return <div className="p-8 text-muted-foreground">Loading financial data...</div>;
   }
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-8 max-w-7xl mx-auto pb-10">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-display font-bold text-gradient-gold">Dashboard</h1>
-          <p className="text-muted-foreground mt-1 text-lg">Your financial overview for this month</p>
+          <p className="text-muted-foreground mt-1 text-lg">Overview of your financial health.</p>
         </div>
-        <div className="flex items-center gap-6">
-           {/* Allocation Toggle */}
-          <div className="flex items-center space-x-2">
-            <Switch id="show-alloc" checked={showAllocation} onCheckedChange={setShowAllocation} />
-            <Label htmlFor="show-alloc" className="text-sm text-muted-foreground">Show Splits</Label>
-          </div>
+      </div>
 
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-muted-foreground">Savings Rate:</span>
-            <div className={`px-4 py-1.5 rounded-full border font-bold ${
-              (stats?.savingsRate || 0) > 20 
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500"
-              : "bg-yellow-500/10 border-yellow-500/20 text-yellow-500"
-            }`}>
+      {/* STATS CARDS (Unchanged) */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="glass-panel border-primary/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Balance</CardTitle>
+            <Wallet className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats?.balance.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Current month cash flow</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="glass-panel border-green-500/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Income</CardTitle>
+            <ArrowUpRight className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-500">
+              +{stats?.income.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Total incoming</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="glass-panel border-red-500/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expenses</CardTitle>
+            <ArrowDownRight className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-500">
+              -{stats?.expenses.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">Total spending</p>
+          </CardContent>
+        </Card>
+
+        <Card className="glass-panel border-blue-500/20">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Savings Rate</CardTitle>
+            <TrendingUp className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-blue-500">
               {stats?.savingsRate.toFixed(1)}%
             </div>
-          </div>
-        </div>
+            <p className="text-xs text-muted-foreground mt-1">Target: 20%</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <StatsCard 
-          title="Total Balance" 
-          value={stats?.balance || 0} 
-          icon={<Wallet className="w-24 h-24 text-primary" />}
-          trend="+12.5% from last month"
-          delay={0.1}
-        />
-        <StatsCard 
-          title="Monthly Income" 
-          value={stats?.income || 0} 
-          icon={<ArrowUpRight className="w-4 h-4 text-primary" />}
-          isIncome={true}
-          delay={0.2}
-        />
-        <StatsCard 
-          title="Monthly Expenses" 
-          value={stats?.expenses || 0} 
-          icon={<ArrowDownRight className="w-4 h-4 text-destructive" />}
-          isIncome={false}
-          isExpense={true}
-          delay={0.3}
-        />
-      </div>
+      {/* ROW 2: CHART & BUDGETS */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4 glass-panel">
+          <CardHeader>
+            <CardTitle>Cash Flow</CardTitle>
+            <CardDescription>Income vs Expenses over time</CardDescription>
+          </CardHeader>
+          <CardContent className="pl-2">
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={stats?.chartData}>
+                  <defs>
+                    <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                    <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted/20" />
+                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `Rp${value/1000}k`} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151' }}
+                    itemStyle={{ color: '#f3f4f6' }}
+                    formatter={(value: number) => value.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                  />
+                  <Area type="monotone" dataKey="income" stroke="#10b981" fillOpacity={1} fill="url(#colorIncome)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="expense" stroke="#ef4444" fillOpacity={1} fill="url(#colorExpense)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
 
-      <div className="grid gap-6 md:grid-cols-7">
-        {/* Main Chart Section */}
-        <div className="col-span-full lg:col-span-4 space-y-6">
-          {/* Cash Flow Chart */}
-          <Card className="glass-panel border-white/5">
-            <CardHeader>
-              <CardTitle>Cash Flow (This Month)</CardTitle>
-            </CardHeader>
-            <CardContent className="pl-0">
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={stats?.chartData} margin={{ top: 10, right: 30, left: 20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#F5F749" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#F5F749" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#EF4444" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="name" stroke="#666" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#666" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(val) => `Rp${(val/1000).toFixed(0)}k`} />
-                    <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', borderRadius: '8px' }} itemStyle={{ color: '#fff' }} />
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.1} vertical={false} />
-                    <Area type="monotone" dataKey="income" stroke="#F5F749" fillOpacity={1} fill="url(#colorIncome)" strokeWidth={3} />
-                    <Area type="monotone" dataKey="expense" stroke="#EF4444" fillOpacity={1} fill="url(#colorExpense)" strokeWidth={3} />
-                  </AreaChart>
-                </ResponsiveContainer>
+        <Card className="col-span-3 glass-panel">
+          <CardHeader>
+            <CardTitle>Budget Limits</CardTitle>
+            <CardDescription>Monthly limits per category</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[300px] pr-4">
+              <div className="space-y-6">
+                {budgets?.map((budget) => (
+                  <div key={budget.id} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{budget.category?.icon}</span>
+                        <span className="font-medium">{budget.category?.name}</span>
+                      </div>
+                      <span className="text-muted-foreground">
+                        {Number(budget.spent).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })} 
+                        <span className="mx-1">/</span>
+                        {Number(budget.amount).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })}
+                      </span>
+                    </div>
+                    <Progress 
+                      value={budget.percentage} 
+                      className={`h-2 ${budget.percentage > 100 ? 'bg-red-900' : ''}`} 
+                      indicatorClassName={budget.percentage > 100 ? 'bg-red-500' : budget.percentage > 80 ? 'bg-amber-500' : 'bg-emerald-500'}
+                    />
+                  </div>
+                ))}
+                {!budgets?.length && (
+                  <div className="text-muted-foreground text-center py-8">No budgets set for this month.</div>
+                )}
               </div>
-            </CardContent>
-          </Card>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
 
-          {/* Budget Progress Section */}
-          <Card className="glass-panel border-white/5">
-             <CardHeader>
-              <CardTitle>Budget Limits</CardTitle>
-              <CardDescription>Track spending against category limits</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {budgets?.map((budget) => (
-                <div key={budget.id} className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="font-medium flex items-center gap-2">
-                      <span className="text-lg">{budget.category?.icon}</span>
-                      {budget.category?.name}
-                    </span>
-                    <span className={budget.percentage > 100 ? "text-destructive font-bold" : "text-muted-foreground"}>
-                      {formatCurrency(budget.spent)} / {formatCurrency(Number(budget.amount))}
-                    </span>
-                  </div>
-                  <Progress value={Math.min(budget.percentage, 100)} className={`h-2 ${budget.percentage > 100 ? "bg-destructive/20" : ""}`} indicatorClassName={budget.percentage > 90 ? "bg-destructive" : "bg-primary"} />
-                </div>
-              ))}
-              {(!budgets || budgets.length === 0) && (
-                <div className="text-center py-4 text-muted-foreground text-sm">
-                  No budgets set. Go to Settings to add limits.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Sidebar: Recent Transactions & Income Allocation */}
-        <div className="col-span-full lg:col-span-3 space-y-6">
-          
-          {/* Income Allocation Widget (Conditional) */}
-          {showAllocation && activeRule && (
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-              <Card className="glass-panel border-primary/20 bg-primary/5">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <PieIcon className="w-4 h-4 text-primary" />
-                    Income Allocation ({activeRule.name})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[200px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={allocationData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={60}
-                          outerRadius={80}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {allocationData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color || '#333'} stroke="rgba(0,0,0,0)" />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: '#000', borderRadius: '8px', border: '1px solid #333' }} itemStyle={{ color: '#fff' }} />
-                        <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="mt-4 space-y-2">
-                    {allocationData.map((item, i) => (
-                       <div key={i} className="flex justify-between text-sm">
-                         <span className="text-muted-foreground">{item.name}</span>
-                         <span className="font-bold">{item.value}%</span>
-                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* Recent Transactions */}
-          <Card className="glass-panel border-white/5 h-fit">
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+      {/* ROW 3: INCOME ALLOCATION & TRANSACTIONS */}
+      <div className="grid gap-4 md:grid-cols-2">
+         {/* NEW: INCOME ALLOCATION WIDGET */}
+         <Card className="glass-panel">
+            <CardHeader className="flex flex-row items-center justify-between">
+               <div>
+                  <CardTitle>Income Split</CardTitle>
+                  <CardDescription>
+                     {activeRule ? `Rule: ${activeRule.name}` : "No active rule set"}
+                  </CardDescription>
+               </div>
+               <Link href="/allocations">
+                  <Button variant="ghost" size="icon">
+                     <Split className="h-4 w-4" />
+                  </Button>
+               </Link>
             </CardHeader>
             <CardContent>
-              <div className="space-y-5">
-                {recentTx?.map((tx) => (
-                  <div key={tx.id} className="flex items-center justify-between group cursor-pointer hover:bg-white/5 p-2 -mx-2 rounded-lg transition-colors">
+               {activeRule ? (
+                  <div className="space-y-5">
+                     {activeRule.allocations?.map((alloc: any) => {
+                        // Calculate expected amount based on this month's actual income
+                        const amount = (Number(alloc.percentage) / 100) * (stats?.income || 0);
+                        
+                        return (
+                           <div key={alloc.id} className="space-y-1.5">
+                              <div className="flex justify-between text-sm">
+                                 <span className="flex items-center gap-2">
+                                    <span>{alloc.category?.icon}</span>
+                                    {alloc.category?.name}
+                                 </span>
+                                 <div className="flex items-center gap-2">
+                                    <span className="font-bold text-emerald-500">
+                                       {amount.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground w-8 text-right">
+                                       {alloc.percentage}%
+                                    </span>
+                                 </div>
+                              </div>
+                              <Progress value={Number(alloc.percentage)} className="h-1.5" indicatorClassName="bg-primary/50" />
+                           </div>
+                        );
+                     })}
+                     <div className="pt-2 border-t border-white/5 text-xs text-center text-muted-foreground">
+                        Based on actual monthly income: {stats?.income.toLocaleString('id-ID', { style: 'currency', currency: 'IDR' })}
+                     </div>
+                  </div>
+               ) : (
+                  <div className="flex flex-col items-center justify-center py-6 text-center space-y-3">
+                     <Percent className="h-10 w-10 text-muted-foreground/30" />
+                     <p className="text-muted-foreground text-sm max-w-[200px]">
+                        Set up an income rule to automatically calculate how to split your pay.
+                     </p>
+                     <Link href="/allocations">
+                        <Button variant="outline" size="sm">Configure Allocations</Button>
+                     </Link>
+                  </div>
+               )}
+            </CardContent>
+         </Card>
+
+         {/* EXISTING: RECENT TRANSACTIONS */}
+         <Card className="glass-panel">
+            <CardHeader>
+              <CardTitle>Recent Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {recentTransactions?.map((tx) => (
+                  <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        tx.type === 'income' ? 'bg-primary/20 text-primary' : 'bg-muted text-foreground'
-                      }`}>
-                        {tx.category?.icon ? <span className="text-lg">{tx.category.icon}</span> : <CreditCard className="w-5 h-5" />}
+                      <div className={`p-2 rounded-full ${tx.type === 'income' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
+                        {tx.type === 'income' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
                       </div>
                       <div>
-                        <p className="font-medium leading-none group-hover:text-primary transition-colors">{tx.description}</p>
-                        <p className="text-xs text-muted-foreground mt-1">{format(new Date(tx.transaction_date), "dd MMM")}</p>
+                        <div className="font-medium text-sm">{tx.description}</div>
+                        <div className="text-xs text-muted-foreground">{format(new Date(tx.transaction_date), "dd MMM")} • {tx.category?.name}</div>
                       </div>
                     </div>
-                    <div className={`font-bold ${tx.type === 'income' ? 'text-primary' : 'text-foreground'}`}>
-                      {tx.type === 'income' ? '+' : '-'}{formatCurrency(Number(tx.amount))}
+                    <div className={`font-bold text-sm ${tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                      {tx.type === 'income' ? '+' : '-'}{Number(tx.amount).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })}
                     </div>
                   </div>
                 ))}
-                {!recentTx?.length && <div className="text-center py-8 text-muted-foreground">No recent transactions.</div>}
+                {!recentTransactions?.length && (
+                   <div className="text-muted-foreground text-center py-6 italic">No recent transactions.</div>
+                )}
               </div>
             </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatsCard({ title, value, icon, trend, isIncome, isExpense, delay }: any) {
-  const formatCurrency = (val: number) => 
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val);
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}>
-      <Card className={`glass-panel overflow-hidden relative ${isIncome ? 'border-l-4 border-l-primary/50' : isExpense ? 'border-l-4 border-l-destructive/50' : ''}`}>
-        {!isIncome && !isExpense && (
-          <div className="absolute top-0 right-0 p-4 opacity-10">{icon}</div>
-        )}
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold font-display text-white mb-1 flex items-center">
-            {formatCurrency(value)}
-            {(isIncome || isExpense) && (
-               <div className={`ml-auto p-2 rounded-full ${isIncome ? 'bg-primary/10' : 'bg-destructive/10'}`}>
-                 {icon}
-               </div>
-            )}
-          </div>
-          {trend && (
-            <p className="text-xs text-primary flex items-center mt-2">
-              <TrendingUp className="w-3 h-3 mr-1" /> {trend}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </motion.div>
-  );
-}
-
-function DashboardSkeleton() {
-  return (
-    <div className="space-y-8">
-      <Skeleton className="h-20 w-full" />
-      <div className="grid gap-6 md:grid-cols-3">
-        <Skeleton className="h-40" /><Skeleton className="h-40" /><Skeleton className="h-40" />
-      </div>
-      <div className="grid gap-6 md:grid-cols-7">
-        <Skeleton className="col-span-4 h-96" />
-        <Skeleton className="col-span-3 h-96" />
+         </Card>
       </div>
     </div>
   );

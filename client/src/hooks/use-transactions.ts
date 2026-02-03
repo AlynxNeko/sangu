@@ -350,13 +350,18 @@ export function useToggleIncomeRule() {
   
   return useMutation({
     mutationFn: async ({ id, isActive }: { id: string | number, isActive: boolean }) => {
-      // First, set all to false if we are activating one (Radio Button behavior)
+      // 1. If we are activating a rule, first turn off all others for this user
       if (isActive) {
-        // Safe query compatible with both UUID and Integer IDs
-        await supabase.from('income_split_rules').update({ is_active: false }).not('id', 'is', null);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          await supabase
+            .from('income_split_rules')
+            .update({ is_active: false })
+            .eq('user_id', user.id); // Scope to user to avoid permission errors
+        }
       }
       
-      // Then set the specific one
+      // 2. Then update the specific rule
       const { error } = await supabase
         .from('income_split_rules')
         .update({ is_active: isActive })

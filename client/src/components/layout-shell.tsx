@@ -42,8 +42,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar Desktop */}
       <aside className="hidden lg:flex flex-col w-72 border-r border-border/50 bg-card/30 backdrop-blur-xl p-6 fixed h-full z-30">
         <div className="flex items-center gap-3 mb-12">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg shadow-primary/20">
-            <span className="text-xl font-bold text-black">S</span>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-primary/20">
+            <img src="/sangu-logo.png" alt="Sangu Logo" />
           </div>
           <h1 className="text-2xl font-bold font-display tracking-tight">Sangu</h1>
         </div>
