@@ -121,7 +121,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
         
         form.setValue("receiptUrl", publicUrl);
 
-        const WEBHOOK_URL = "https://n8n.autoable.cloud/webhook/process-invoice"; 
+        const WEBHOOK_URL = import.meta.env.VITE_OCR_WEBHOOK_URL; 
         
         const formData = new FormData();
         formData.append('data', file);

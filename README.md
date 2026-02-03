@@ -23,7 +23,7 @@ The design goal was simple: **AI may assist, but it must never be authoritative*
 ## Core Capabilities
 
 ### AI-Based Receipt Understanding
-![OCR Flow](image-4.png)
+![OCR Flow](client/public/images/image-4.png)
 
 - Vision-based OCR using **Gemini 2.5 Flash**
 - Extracts totals, merchant names, payment methods, and inferred categories
@@ -32,7 +32,7 @@ The design goal was simple: **AI may assist, but it must never be authoritative*
 ---
 
 ### Automation-First Architecture
-![n8n Workflow](image.png)
+![n8n Workflow](client/public/images/image.png)
 
 - **n8n** serves as the orchestration backbone, not the frontend
 - Fully asynchronous receipt processing
@@ -42,8 +42,8 @@ The design goal was simple: **AI may assist, but it must never be authoritative*
 ---
 
 ### Financial Tracking & Analytics
-![Dashboard](image-6.png)
-![Budgeting](image-7.png)
+![Dashboard](client/public/images/image-6.png)
+![Budgeting](client/public/images/image-7.png)
 
 - Unified ledger for income and expenses
 - Budget thresholds with progress monitoring
@@ -52,9 +52,9 @@ The design goal was simple: **AI may assist, but it must never be authoritative*
 ---
 
 ### Expense Splitting & Obligations
-![Split Bills](image-5.png)
-![Debts](image-8.png)
-![Manage Splits](image-9.png)
+![Split Bills](client/public/images/image-5.png)
+![Debts](client/public/images/image-8.png)
+![Manage Splits](client/public/images/image-9.png)
 
 - Split-bill tracking with paid / unpaid states
 - Clear ownership of obligations
@@ -63,7 +63,7 @@ The design goal was simple: **AI may assist, but it must never be authoritative*
 ---
 
 ### Recurring Financial Events
-![Recurring Bills](image-10.png)
+![Recurring Bills](client/public/images/image-10.png)
 
 - Support for recurring expenses and income
 - Foundation for future forecasting and anomaly detection
