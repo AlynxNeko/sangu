@@ -6,21 +6,22 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useForm } from "react-hook-form";
+import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTransactionSchema } from "@shared/schema";
 import { useCreateRecurringTransaction, useCreateTransaction } from "@/hooks/use-transactions";
 import { useCategories } from "@/hooks/use-categories";
 import { usePaymentMethods } from "@/hooks/use-payment-methods";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Upload, ScanLine, CheckCircle2 } from "lucide-react";
+import { Loader2, Upload, ScanLine, Plus, Trash2 } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
-import { Switch } from "@/components/ui/switch"; // Fixed import path
-import { Checkbox } from "@radix-ui/react-checkbox";
+import { Switch } from "@/components/ui/switch"; 
+import { Checkbox } from "@/components/ui/checkbox"; // Changed from radix to ui component for consistency
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // FIX 1: Robust Schema for String-to-Number Coercion
 const formSchema = insertTransactionSchema
@@ -32,6 +33,11 @@ const formSchema = insertTransactionSchema
     paymentMethodId: z.string().min(1, "Payment method is required"),
     frequency: z.string().optional(),
     startDate: z.string().optional(),
+    splitMode: z.enum(["total", "share"]).default("total"),
+    participants: z.array(z.object({
+      name: z.string().min(1, "Name required"),
+      amount: z.string().default("0")
+    })).optional()
   });
 
 export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
@@ -40,7 +46,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
   
   // Hooks
   const createTx = useCreateTransaction();
-  const createRecurring = useCreateRecurringTransaction(); // Make sure this hook exists in your hooks file!
+  const createRecurring = useCreateRecurringTransaction(); 
   
   const { data: categories } = useCategories();
   const { data: paymentMethods } = usePaymentMethods();
@@ -56,16 +62,42 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       type: "expense",
       amount: "",
       description: "",
-      transactionDate: new Date(), // Keep as Date object for z.coerce.date()
+      transactionDate: new Date(),
       categoryId: "",
       paymentMethodId: "",
       notes: "",
       receiptUrl: "",
       isSplit: false,
+      splitMode: "total",
+      participants: [],
       frequency: "monthly",
       startDate: new Date().toISOString().split('T')[0]
     }
   });
+
+  // Field Array for Dynamic Friends
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "participants"
+  });
+
+  // Calculate User's Share dynamically
+  const amountValue = Number(form.watch("amount")) || 0;
+  const participants = form.watch("participants") || [];
+  const splitMode = form.watch("splitMode");
+
+  const friendsTotal = participants.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  
+  // Logic: 
+  // If Mode = "total" (User enters 150k), My Share = 150k - Friends(100k) = 50k
+  // If Mode = "share" (User enters 50k), Total Bill = 50k + Friends(100k) = 150k
+  const userShare = splitMode === "total" 
+    ? Math.max(0, amountValue - friendsTotal)
+    : amountValue;
+
+  const totalBill = splitMode === "total"
+    ? amountValue
+    : amountValue + friendsTotal;
 
   const { getRootProps, getInputProps } = useDropzone({
     accept: { 'image/*': [] },
@@ -149,9 +181,18 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
 
   // FIX 2: Correct onSubmit Logic Branching
   const onSubmit = (data: any) => {
+    // Determine the final "expense" amount to record for the user
+    const finalUserAmount = splitMode === "total" 
+      ? (Number(data.amount) - friendsTotal) 
+      : Number(data.amount);
+
+    if (finalUserAmount < 0) {
+      toast({ title: "Invalid Amounts", description: "Friends' shares exceed the total bill!", variant: "destructive" });
+      return;
+    }
     // 1. Common Data Preparation
     const basePayload = {
-      amount: data.amount,
+      // amount: data.amount,
       categoryId: Number(data.categoryId),
       paymentMethodId: Number(data.paymentMethodId),
       description: data.description,
@@ -159,6 +200,17 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       receiptUrl: data.receiptUrl,
       userId: user?.id,
       type: activeTab,
+      amount: finalUserAmount.toString(), // SAVE ONLY USER SHARE
+      transactionDate: data.transactionDate.toISOString(),
+      isSplit: data.isSplit,
+      // Add Split Details
+      splitDetails: data.isSplit ? {
+        amount: splitMode === "total" ? Number(data.amount) : (Number(data.amount) + friendsTotal),
+        participants: data.participants.map((p: any) => ({
+          name: p.name,
+          amount: Number(p.amount)
+        }))
+      } : undefined
     };
 
     if (isRecurring) {
@@ -189,9 +241,8 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       // === BRANCH B: ONE-TIME TRANSACTION ===
       const transactionPayload = {
         ...basePayload,
-        // The hook likely expects 'date' or 'transactionDate' depending on implementation
-        // Assuming your hook expects 'date' based on standard practice:
-        date: data.transactionDate.toISOString(), 
+        // FIX: Change 'date' to 'transactionDate' to match the schema and hook expectation
+        transactionDate: data.transactionDate.toISOString(), 
         isSplit: data.isSplit
       };
 
@@ -222,7 +273,6 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
 
         <div className="max-h-[70vh] overflow-y-auto px-6 pb-6">
           <Form {...form}>
-            {/* ... [Rest of your UI/JSX remains exactly the same] ... */}
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               {/* Dropzone */}
               <div {...getRootProps()} className={`border-2 border-dashed transition-all rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer ${isScanning ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/50 bg-muted/20'}`}>
@@ -265,7 +315,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                 )}
               />
 
-              {/* Recurring Toggle - MOVED UP for better UX (Optional) or keep at bottom */}
+              {/* Recurring Toggle */}
               <div className="flex items-center justify-between border p-4 rounded-lg bg-muted/20">
                 <div className="space-y-0.5">
                   <FormLabel className="text-base">Recurring Transaction?</FormLabel>
@@ -430,16 +480,82 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
 
               {/* Show Friends Input only if isSplit is checked */}
               {form.watch("isSplit") && (
-                <div className="space-y-4 border p-4 rounded-md bg-muted/20">
-                  <h4 className="font-medium text-sm">Who are you splitting with?</h4>
-                  {/* You would need to add logic here to add/remove friends dynamically */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input placeholder="Friend Name" />
-                    <Input placeholder="Amount (Rp)" type="number" />
+                <div className="space-y-4 border p-4 rounded-md bg-muted/20 animate-in fade-in slide-in-from-top-2">
+                  
+                  {/* Mode Toggle */}
+                  <FormField
+                    control={form.control}
+                    name="splitMode"
+                    render={({ field }) => (
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                        className="grid grid-cols-2 gap-4 mb-4"
+                      >
+                        <div>
+                          <RadioGroupItem value="total" id="mode-total" className="peer sr-only" />
+                          <Label
+                            htmlFor="mode-total"
+                            className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                          >
+                            <span className="font-semibold">Input Total Bill</span>
+                            <span className="text-xs text-muted-foreground mt-1">Calculate my share</span>
+                          </Label>
+                        </div>
+                        <div>
+                          <RadioGroupItem value="share" id="mode-share" className="peer sr-only" />
+                          <Label
+                            htmlFor="mode-share"
+                            className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+                          >
+                            <span className="font-semibold">Input My Share</span>
+                            <span className="text-xs text-muted-foreground mt-1">Add friends on top</span>
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    )}
+                  />
+
+                  {/* Dynamic Friends List */}
+                  <div className="space-y-3">
+                    {fields.map((field, index) => (
+                      <div key={field.id} className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <Label className="text-xs">Friend Name</Label>
+                          <Input {...form.register(`participants.${index}.name`)} placeholder="Name" />
+                        </div>
+                        <div className="w-32">
+                          <Label className="text-xs">Amount</Label>
+                          <Input {...form.register(`participants.${index}.amount`)} type="number" placeholder="0" />
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                  <Button type="button" variant="outline" size="sm" className="w-full">
-                    + Add Friend
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-dashed"
+                    onClick={() => append({ name: "", amount: "" })}
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add Friend
                   </Button>
+
+                  {/* Live Summary */}
+                  <div className="bg-background/50 p-3 rounded-md text-sm space-y-1 mt-4">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total Bill:</span>
+                      <span className="font-medium">Rp {totalBill.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-primary font-bold">
+                      <span>Your Expense (Recorded):</span>
+                      <span>Rp {userShare.toLocaleString()}</span>
+                    </div>
+                  </div>
                 </div>
               )}
 

@@ -8,7 +8,8 @@ import {
   LogOut, 
   Menu,
   X,
-  Plus
+  Plus,
+  HandCoins
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
@@ -27,6 +28,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/transactions", label: "Transactions", icon: WalletCards },
     { href: "/recurring", label: "Recurring", icon: Repeat },
+    { href: "/debts", label: "Debts & Credits", icon: HandCoins },
     { href: "/analytics", label: "Analytics", icon: PieChart },
     { href: "/settings", label: "Settings", icon: Settings },
   ];

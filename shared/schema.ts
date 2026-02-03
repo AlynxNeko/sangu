@@ -6,7 +6,7 @@ import { z } from "zod";
 // Note: In Supabase, 'id' might be uuid, but we'll define what we expect.
 
 export const userProfiles = pgTable("user_profiles", {
-  id: uuid("id").primaryKey(), // Matches auth.users.id
+  id: uuid("id").primaryKey(), 
   email: text("email"),
   fullName: text("full_name"),
   avatarUrl: text("avatar_url"),
@@ -16,10 +16,10 @@ export const userProfiles = pgTable("user_profiles", {
 });
 
 export const categories = pgTable("categories", {
-  id: serial("id").primaryKey(),
-  userId: uuid("user_id"), // Nullable for default categories
+  id: serial("id").primaryKey(), // Categories can stay serial or change to uuid if you prefer
+  userId: uuid("user_id"), 
   name: text("name").notNull(),
-  type: text("type").notNull(), // 'income' or 'expense'
+  type: text("type").notNull(),
   icon: text("icon"),
   color: text("color"),
   isCustom: boolean("is_custom").default(false),
@@ -30,15 +30,16 @@ export const paymentMethods = pgTable("payment_methods", {
   id: serial("id").primaryKey(),
   userId: uuid("user_id"),
   name: text("name").notNull(),
-  type: text("type").notNull(), // 'cash', 'credit_card', 'debit_card', 'e_wallet', 'bank_transfer'
+  type: text("type").notNull(),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// FIX: Changed id to uuid to match your DB
 export const transactions = pgTable("transactions", {
-  id: serial("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
-  type: text("type").notNull(), // 'income' or 'expense'
+  type: text("type").notNull(), 
   amount: numeric("amount").notNull(),
   categoryId: integer("category_id").references(() => categories.id),
   paymentMethodId: integer("payment_method_id").references(() => paymentMethods.id),
@@ -71,16 +72,17 @@ export const financialGoals = pgTable("financial_goals", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// FIX: Updated to uuid and numeric handling
 export const transactionSplits = pgTable("transaction_splits", {
-  id: serial("id").primaryKey(),
-  transactionId: integer("transaction_id").references(() => transactions.id),
+  id: uuid("id").primaryKey().defaultRandom(),
+  transactionId: uuid("transaction_id").references(() => transactions.id),
   totalAmount: numeric("total_amount").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const splitParticipants = pgTable("split_participants", {
-  id: serial("id").primaryKey(),
-  splitId: integer("split_id").references(() => transactionSplits.id),
+  id: uuid("id").primaryKey().defaultRandom(),
+  splitId: uuid("split_id").references(() => transactionSplits.id),
   name: text("name").notNull(),
   email: text("email"),
   amountOwed: numeric("amount_owed").notNull(),
