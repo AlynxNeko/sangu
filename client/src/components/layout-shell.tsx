@@ -9,7 +9,8 @@ import {
   Menu,
   X,
   Plus,
-  HandCoins
+  HandCoins,
+  Percent
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
@@ -29,6 +30,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { href: "/transactions", label: "Transactions", icon: WalletCards },
     { href: "/recurring", label: "Recurring", icon: Repeat },
     { href: "/debts", label: "Debts & Credits", icon: HandCoins },
+    { href: "/allocations", label: "Allocations", icon: Percent },
     { href: "/analytics", label: "Analytics", icon: PieChart },
     { href: "/settings", label: "Settings", icon: Settings },
   ];

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { InsertTransaction, Transaction } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { eachDayOfInterval, endOfMonth, format, startOfMonth } from "date-fns";
 
 interface CreateTransactionPayload extends InsertTransaction {
   splitDetails?: {
@@ -194,15 +195,19 @@ export function useDashboardStats() {
     queryKey: ['dashboard', 'stats'],
     queryFn: async () => {
       const now = new Date();
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const start = startOfMonth(now);
+      const end = endOfMonth(now);
       
+      // 1. Fetch transactions for this month
       const { data: transactions, error } = await supabase
         .from('transactions')
-        .select('amount, type')
-        .gte('transaction_date', firstDay); // Fixed: 'date' -> 'transaction_date'
+        .select('amount, type, transaction_date')
+        .gte('transaction_date', start.toISOString())
+        .lte('transaction_date', end.toISOString());
 
       if (error) throw error;
 
+      // 2. Calculate Totals
       const income = transactions
         .filter(t => t.type === 'income')
         .reduce((sum, t) => sum + Number(t.amount), 0);
@@ -214,12 +219,160 @@ export function useDashboardStats() {
       const balance = income - expenses;
       const savingsRate = income > 0 ? ((income - expenses) / income) * 100 : 0;
 
+      // 3. Generate Chart Data (Daily aggregation for current month)
+      // Get all days in the current month so far (or last 30 days if you prefer)
+      const days = eachDayOfInterval({ start, end: now });
+
+      const chartData = days.map(day => {
+        const dateStr = format(day, 'yyyy-MM-dd');
+        const dayTxs = transactions.filter(t => 
+          t.transaction_date.startsWith(dateStr)
+        );
+
+        return {
+          name: format(day, 'd MMM'), // e.g. "4 Feb"
+          fullDate: dateStr,
+          income: dayTxs.filter(t => t.type === 'income').reduce((sum, t) => sum + Number(t.amount), 0),
+          expense: dayTxs.filter(t => t.type === 'expense').reduce((sum, t) => sum + Number(t.amount), 0),
+        };
+      });
+
       return {
         income,
         expenses,
         balance,
-        savingsRate
+        savingsRate,
+        chartData
       };
+    }
+  });
+}
+
+// --- NEW HOOKS FOR BUDGETS ---
+
+export function useBudgetsProgress() {
+  return useQuery({
+    queryKey: ['budgets', 'progress'],
+    queryFn: async () => {
+      const now = new Date();
+      const start = startOfMonth(now).toISOString();
+
+      // 1. Fetch Budgets with Categories
+      const { data: budgets, error: budgetError } = await supabase
+        .from('budgets')
+        .select(`*, category:categories(*)`);
+      
+      if (budgetError) throw budgetError;
+
+      // 2. Fetch Expenses for this month
+      const { data: expenses, error: expenseError } = await supabase
+        .from('transactions')
+        .select('amount, category_id')
+        .eq('type', 'expense')
+        .gte('transaction_date', start);
+
+      if (expenseError) throw expenseError;
+
+      // 3. Match Budget to Actual Spending
+      const budgetProgress = budgets.map(budget => {
+        const spent = expenses
+          .filter(e => e.category_id === budget.category_id)
+          .reduce((sum, e) => sum + Number(e.amount), 0);
+        
+        const total = Number(budget.amount);
+        const percentage = total > 0 ? (spent / total) * 100 : 0;
+
+        return {
+          ...budget,
+          spent,
+          percentage
+        };
+      });
+
+      return budgetProgress;
+    }
+  });
+}
+
+// --- NEW HOOKS FOR INCOME ALLOCATION (SPLITTING) ---
+
+export function useIncomeRules() {
+  return useQuery({
+    queryKey: ['income_rules'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('income_split_rules')
+        .select(`
+          *,
+          allocations:income_split_allocations(
+            *,
+            category:categories(*)
+          )
+        `)
+        .order('id');
+      if (error) throw error;
+      return data;
+    }
+  });
+}
+
+export function useCreateIncomeRule() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { name: string, allocations: { categoryId: number, percentage: number }[] }) => {
+      // 1. Create Rule
+      const { data: rule, error: ruleError } = await supabase
+        .from('income_split_rules')
+        .insert({ name: data.name, user_id: (await supabase.auth.getUser()).data.user?.id })
+        .select()
+        .single();
+      
+      if (ruleError) throw ruleError;
+
+      // 2. Create Allocations
+      if (data.allocations.length > 0) {
+        const allocationPayload = data.allocations.map(a => ({
+          rule_id: rule.id,
+          category_id: a.categoryId,
+          percentage: String(a.percentage)
+        }));
+
+        const { error: allocError } = await supabase
+          .from('income_split_allocations')
+          .insert(allocationPayload);
+        
+        if (allocError) throw allocError;
+      }
+      return rule;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income_rules'] });
+      toast({ title: "Rule Created", description: "Income split rule saved." });
+    }
+  });
+}
+
+export function useToggleIncomeRule() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, isActive }: { id: number, isActive: boolean }) => {
+      // First, set all to false if we are activating one
+      if (isActive) {
+        await supabase.from('income_split_rules').update({ is_active: false }).neq('id', 0);
+      }
+      
+      const { error } = await supabase
+        .from('income_split_rules')
+        .update({ is_active: isActive })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income_rules'] });
     }
   });
 }

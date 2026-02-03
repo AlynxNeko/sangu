@@ -15,6 +15,7 @@ import NotFound from "@/pages/not-found";
 import { LayoutShell } from "@/components/layout-shell";
 import Recurring from "@/pages/recurring"; 
 import DebtsPage from "@/pages/debts";     
+import AllocationsPage from "@/pages/allocations";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -53,6 +54,9 @@ function Router() {
       </Route>
       <Route path="/debts">
         <ProtectedRoute component={DebtsPage} />
+      </Route>
+      <Route path="/allocations">
+        <ProtectedRoute component={AllocationsPage} />
       </Route>
       <Route path="/analytics">
         <ProtectedRoute component={Analytics} />
