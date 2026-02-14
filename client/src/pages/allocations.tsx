@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
-import { Plus, Trash2, Check, Percent } from "lucide-react";
+import { Plus, Trash2, Check, Percent, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function AllocationsPage() {
@@ -15,6 +15,8 @@ export default function AllocationsPage() {
   const { data: categories } = useCategories();
   const createRule = useCreateIncomeRule();
   const toggleRule = useToggleIncomeRule();
+
+  const activeRule = rules?.find((r: any) => r.is_active);
 
   const [newRuleName, setNewRuleName] = useState("");
   const [allocations, setAllocations] = useState<{ categoryId: string, percentage: string }[]>([
@@ -40,29 +42,29 @@ export default function AllocationsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (totalPercentage !== 100) {
-        alert("Total percentage must equal 100%");
-        return;
+      alert("Total percentage must equal 100%");
+      return;
     }
 
     createRule.mutate({
-        name: newRuleName,
-        allocations: allocations.map(a => ({
+      name: newRuleName,
+      allocations: allocations.map(a => ({
         // Remove Number() conversion here
-        categoryId: a.categoryId, 
+        categoryId: a.categoryId,
         percentage: Number(a.percentage)
-        }))
+      }))
     }, {
-        onSuccess: () => {
+      onSuccess: () => {
         setNewRuleName("");
         setAllocations([{ categoryId: "", percentage: "" }]);
-        }
+      }
     });
-    };
+  };
 
-    const isFormInvalid = 
-        !newRuleName || 
-        totalPercentage !== 100 || 
-        allocations.some(a => !a.categoryId || !a.percentage);
+  const isFormInvalid =
+    !newRuleName ||
+    totalPercentage !== 100 ||
+    allocations.some(a => !a.categoryId || !a.percentage);
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-10">
@@ -72,6 +74,56 @@ export default function AllocationsPage() {
       </div>
 
       <div className="grid gap-8 md:grid-cols-2">
+        {/* WATERFALL VISUALIZATION */}
+        <Card className="glass-panel border-primary/20 bg-gradient-to-br from-primary/5 to-transparent md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" />
+              Income Flow Visualization
+            </CardTitle>
+            <CardDescription>How your 100% Income is processed before Allocation.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Step 1: Gross */}
+              <div className="flex items-center justify-between p-3 bg-card/50 rounded-lg border border-white/5">
+                <span className="font-bold">1. Gross Income</span>
+                <span className="font-mono">10,000,000 (Example)</span>
+              </div>
+
+              {/* Step 2: Deductions */}
+              <div className="pl-8 space-y-2 relative border-l-2 border-dashed border-muted ml-4 py-2">
+                {activeRule?.is_tithe_enabled && (
+                  <div className="flex items-center justify-between text-sm text-rose-400">
+                    <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-rose-500" /> Less Tithe ({activeRule.tithe_percentage}%)</span>
+                    <span className="font-mono">- {(10000000 * (Number(activeRule.tithe_percentage) / 100)).toLocaleString()}</span>
+                  </div>
+                )}
+                {activeRule?.is_savings_enabled && (
+                  <div className="flex items-center justify-between text-sm text-emerald-400">
+                    <span className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-emerald-500" /> Less Savings ({activeRule.savings_percentage}%)</span>
+                    <span className="font-mono">- {(10000000 * (Number(activeRule.savings_percentage) / 100)).toLocaleString()}</span>
+                  </div>
+                )}
+                {(!activeRule?.is_tithe_enabled && !activeRule?.is_savings_enabled) && (
+                  <div className="text-sm text-muted-foreground italic">No deductions configured in Savings page.</div>
+                )}
+              </div>
+
+              {/* Step 3: Net */}
+              <div className="flex items-center justify-between p-3 bg-primary/10 rounded-lg border border-primary/20">
+                <div className="flex flex-col">
+                  <span className="font-bold text-primary">2. Net Allocatable Income</span>
+                  <span className="text-xs text-muted-foreground">This is the 100% you are splitting below.</span>
+                </div>
+                <span className="font-mono font-bold text-xl">
+                  {(10000000 * (1 - (Number(activeRule?.tithe_percentage || 0) + Number(activeRule?.savings_percentage || 0)) / 100)).toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* CREATE FORM */}
         <Card className="glass-panel border-primary/20">
           <CardHeader>
@@ -82,11 +134,11 @@ export default function AllocationsPage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label>Rule Name</Label>
-                <Input 
-                  placeholder="e.g. Monthly Salary Split" 
+                <Input
+                  placeholder="e.g. Monthly Salary Split"
                   value={newRuleName}
                   onChange={(e) => setNewRuleName(e.target.value)}
-                  required 
+                  required
                 />
               </div>
 
@@ -97,11 +149,11 @@ export default function AllocationsPage() {
                     Total: {totalPercentage}%
                   </span>
                 </Label>
-                
+
                 {allocations.map((alloc, index) => (
                   <div key={index} className="flex gap-2">
-                    <Select 
-                      value={alloc.categoryId} 
+                    <Select
+                      value={alloc.categoryId}
                       onValueChange={(val) => handleAllocationChange(index, 'categoryId', val)}
                     >
                       <SelectTrigger className="w-[180px]">
@@ -113,11 +165,11 @@ export default function AllocationsPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                    
+
                     <div className="relative flex-1">
-                      <Input 
-                        type="number" 
-                        placeholder="%" 
+                      <Input
+                        type="number"
+                        placeholder="%"
                         value={alloc.percentage}
                         onChange={(e) => handleAllocationChange(index, 'percentage', e.target.value)}
                         className="pl-8"
@@ -130,7 +182,7 @@ export default function AllocationsPage() {
                     </Button>
                   </div>
                 ))}
-                
+
                 <Button type="button" variant="outline" size="sm" onClick={handleAddAllocation} className="w-full border-dashed">
                   <Plus className="h-4 w-4 mr-2" /> Add Category
                 </Button>
@@ -147,7 +199,7 @@ export default function AllocationsPage() {
         <div className="space-y-4">
           <h2 className="text-xl font-bold">Your Rules</h2>
           {isLoading && <div className="text-muted-foreground">Loading rules...</div>}
-          
+
           {rules?.map((rule: any) => (
             <Card key={rule.id} className={`transition-all ${rule.is_active ? 'border-primary bg-primary/5' : 'border-white/5'}`}>
               <CardHeader className="pb-3">
@@ -155,15 +207,15 @@ export default function AllocationsPage() {
                   <CardTitle className="text-lg">{rule.name}</CardTitle>
                   <div className="flex items-center gap-2">
                     <Label htmlFor={`rule-${rule.id}`} className="text-xs text-muted-foreground">
-                        {/* FIX: Use rule.is_active instead of rule.isActive */}
-                        {rule.is_active ? 'Active' : 'Inactive'}
+                      {/* FIX: Use rule.is_active instead of rule.isActive */}
+                      {rule.is_active ? 'Active' : 'Inactive'}
                     </Label>
-                    <Switch 
-                        id={`rule-${rule.id}`} 
-                        checked={rule.is_active || false} 
-                        onCheckedChange={(checked) => toggleRule.mutate({ id: rule.id, isActive: checked })} 
+                    <Switch
+                      id={`rule-${rule.id}`}
+                      checked={rule.is_active || false}
+                      onCheckedChange={(checked) => toggleRule.mutate({ id: rule.id, isActive: checked })}
                     />
-                    </div>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>

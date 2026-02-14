@@ -1,16 +1,19 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { 
-  LayoutDashboard, 
-  WalletCards, 
-  PieChart, 
-  Settings, 
-  LogOut, 
+import {
+  LayoutDashboard,
+  WalletCards,
+  PieChart,
+  Settings,
+  LogOut,
   Menu,
   X,
   Plus,
   HandCoins,
-  Percent
+  Percent,
+  Tag,
+  Wallet,
+  TrendingUp
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
@@ -30,7 +33,10 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     { href: "/transactions", label: "Transactions", icon: WalletCards },
     { href: "/recurring", label: "Recurring", icon: Repeat },
     { href: "/debts", label: "Debts & Credits", icon: HandCoins },
+    { href: "/savings", label: "Savings & Tithe", icon: TrendingUp },
     { href: "/allocations", label: "Allocations", icon: Percent },
+    { href: "/categories", label: "Categories", icon: Tag },
+    { href: "/payment-methods", label: "Payment Methods", icon: Wallet },
     { href: "/analytics", label: "Analytics", icon: PieChart },
     { href: "/settings", label: "Settings", icon: Settings },
   ];
@@ -67,15 +73,15 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="mt-auto space-y-4">
-          <Button 
+          <Button
             onClick={() => setIsTxModalOpen(true)}
             className="w-full bg-gradient-to-r from-primary to-primary/90 text-primary-foreground hover:shadow-lg hover:shadow-primary/25 rounded-xl h-12 font-bold"
           >
             <Plus className="w-4 h-4 mr-2" /> New Transaction
           </Button>
 
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             className="w-full justify-start text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={() => signOut()}
           >
@@ -93,7 +99,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           </div>
           <span className="font-bold font-display text-lg">Sangu</span>
         </div>
-        
+
         <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
           <SheetTrigger asChild>
             <Button variant="ghost" size="icon">
@@ -126,8 +132,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
                   </Link>
                 ))}
               </nav>
-              
-              <Button 
+
+              <Button
                 onClick={() => {
                   setIsMobileOpen(false);
                   setIsTxModalOpen(true);

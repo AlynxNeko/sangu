@@ -65,7 +65,7 @@ export function useCreateTransaction() {
           type: transaction.type,
           amount: String(transaction.amount || 0), // Safe string conversion
           category_id: transaction.categoryId ? Number(transaction.categoryId) : null,
-          payment_method_id: transaction.paymentMethodId ? Number(transaction.paymentMethodId) : null,
+          payment_method_id: transaction.paymentMethodId, // UUID, don't cast to Number
           description: transaction.description,
           transaction_date: transaction.transactionDate, 
           receipt_url: transaction.receiptUrl,
@@ -76,6 +76,98 @@ export function useCreateTransaction() {
         .single();
 
       if (txError) throw txError;
+
+      // 1.5 CHECK FOR AUTO-SPLIT RULES (Only for Income)
+      if (transaction.type === 'income') {
+        const { data: user } = await supabase.auth.getUser();
+        if (user.user) {
+          const { data: rules } = await supabase
+            .from('income_split_rules')
+            .select('*')
+            .eq('user_id', user.user.id)
+            .eq('is_active', true)
+            .single();
+
+          if (rules) {
+            const incomeAmount = Number(transaction.amount);
+            const sourceMethodId = transaction.paymentMethodId;
+
+            // A. TITHE LOGIC
+            if (rules.is_tithe_enabled) {
+                const titheAmount = incomeAmount * (Number(rules.tithe_percentage) / 100);
+                if (titheAmount > 0) {
+                    await supabase.from('transactions').insert({
+                        user_id: user.user.id,
+                        type: 'expense',
+                        amount: String(titheAmount),
+                        payment_method_id: sourceMethodId, // Available from main income input
+                        description: `Tithe / Perpuluhan (${rules.tithe_percentage}%)`,
+                        transaction_date: transaction.transactionDate,
+                        notes: `Auto-deducted from ${transaction.description}`
+                    });
+                }
+            }
+
+            // B. SAVINGS LOGIC (Core + Satellite)
+            if (rules.is_savings_enabled) {
+                const totalSavings = incomeAmount * (Number(rules.savings_percentage) / 100);
+                
+                if (totalSavings > 0) {
+                    const coreShare = totalSavings * (Number(rules.savings_core_percentage) / 100);
+                    const satelliteShare = totalSavings * (Number(rules.savings_satellite_percentage) / 100);
+
+                    // Core Transfer
+                    if (coreShare > 0) {
+                        // 1. Expense from Source
+                        await supabase.from('transactions').insert({
+                            user_id: user.user.id,
+                            type: 'expense',
+                            amount: String(coreShare),
+                            payment_method_id: sourceMethodId,
+                            description: `Transfer to Core Savings`,
+                            transaction_date: transaction.transactionDate,
+                        });
+                        // 2. Income to Core Target (if defined)
+                        if (rules.savings_core_payment_method_id) {
+                             await supabase.from('transactions').insert({
+                                user_id: user.user.id,
+                                type: 'income',
+                                amount: String(coreShare),
+                                payment_method_id: rules.savings_core_payment_method_id,
+                                description: `Incoming Core Savings`,
+                                transaction_date: transaction.transactionDate,
+                            });
+                        }
+                    }
+
+                    // Satellite Transfer
+                    if (satelliteShare > 0) {
+                         // 1. Expense from Source
+                         await supabase.from('transactions').insert({
+                            user_id: user.user.id,
+                            type: 'expense',
+                            amount: String(satelliteShare),
+                            payment_method_id: sourceMethodId,
+                            description: `Transfer to Satellite Inv.`,
+                            transaction_date: transaction.transactionDate,
+                        });
+                        // 2. Income to Satellite Target (if defined)
+                        if (rules.savings_satellite_payment_method_id) {
+                             await supabase.from('transactions').insert({
+                                user_id: user.user.id,
+                                type: 'income',
+                                amount: String(satelliteShare),
+                                payment_method_id: rules.savings_satellite_payment_method_id,
+                                description: `Incoming Satellite Inv.`,
+                                transaction_date: transaction.transactionDate,
+                            });
+                        }
+                    }
+                }
+            }
+          }
+        }
+      }
 
       // 2. If Split, Insert Split Details
       if (transaction.isSplit && transaction.splitDetails) {
@@ -312,11 +404,24 @@ export function useCreateIncomeRule() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { name: string, allocations: { categoryId: number, percentage: number }[] }) => {
+    mutationFn: async (data: any) => {
       // 1. Create Rule
+      const rulePayload = {
+        user_id: (await supabase.auth.getUser()).data.user?.id,
+        name: data.name,
+        is_tithe_enabled: data.isTitheEnabled,
+        tithe_percentage: data.tithePercentage ? String(data.tithePercentage) : "0",
+        is_savings_enabled: data.isSavingsEnabled,
+        savings_percentage: data.savingsPercentage ? String(data.savingsPercentage) : "0",
+        savings_core_percentage: data.savingsCorePercentage ? String(data.savingsCorePercentage) : "0",
+        savings_satellite_percentage: data.savingsSatellitePercentage ? String(data.savingsSatellitePercentage) : "0",
+        savings_core_payment_method_id: data.savingsCorePaymentMethodId ? String(data.savingsCorePaymentMethodId) : null,
+        savings_satellite_payment_method_id: data.savingsSatellitePaymentMethodId ? String(data.savingsSatellitePaymentMethodId) : null,
+      };
+
       const { data: rule, error: ruleError } = await supabase
         .from('income_split_rules')
-        .insert({ name: data.name, user_id: (await supabase.auth.getUser()).data.user?.id })
+        .insert(rulePayload)
         .select()
         .single();
       
@@ -324,7 +429,7 @@ export function useCreateIncomeRule() {
 
       // 2. Create Allocations
       if (data.allocations.length > 0) {
-        const allocationPayload = data.allocations.map(a => ({
+        const allocationPayload = data.allocations.map((a: any) => ({
           rule_id: rule.id,
           category_id: a.categoryId,
           percentage: String(a.percentage)
@@ -408,6 +513,30 @@ export function useCreateRecurringTransaction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recurring_transactions'] });
       toast({ title: "Recurring Scheduled", description: "Automation set up successfully." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  });
+}
+
+export function useMarkSplitPaid() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('split_participants')
+        .update({ is_paid: true })
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['splits'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] }); // Update balance
+      toast({ title: "Marked as Paid", description: "Debt settled successfully." });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });

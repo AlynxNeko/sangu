@@ -13,9 +13,12 @@ import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
 import { LayoutShell } from "@/components/layout-shell";
-import Recurring from "@/pages/recurring"; 
-import DebtsPage from "@/pages/debts";     
+import Recurring from "@/pages/recurring";
+import DebtsPage from "@/pages/debts";
 import AllocationsPage from "@/pages/allocations";
+import CategoriesPage from "@/pages/categories";
+import PaymentMethodsPage from "@/pages/payment-methods";
+import SavingsPage from "@/pages/savings";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { user, isLoading } = useAuth();
@@ -55,8 +58,17 @@ function Router() {
       <Route path="/debts">
         <ProtectedRoute component={DebtsPage} />
       </Route>
+      <Route path="/savings">
+        <ProtectedRoute component={SavingsPage} />
+      </Route>
       <Route path="/allocations">
         <ProtectedRoute component={AllocationsPage} />
+      </Route>
+      <Route path="/categories">
+        <ProtectedRoute component={CategoriesPage} />
+      </Route>
+      <Route path="/payment-methods">
+        <ProtectedRoute component={PaymentMethodsPage} />
       </Route>
       <Route path="/analytics">
         <ProtectedRoute component={Analytics} />

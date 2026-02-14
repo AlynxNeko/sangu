@@ -23,8 +23,9 @@ export const categories = pgTable("categories", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+
 export const paymentMethods = pgTable("payment_methods", {
-  id: serial("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(), // Changed to UUID
   userId: uuid("user_id"),
   name: text("name").notNull(),
   type: text("type").notNull(),
@@ -38,7 +39,7 @@ export const transactions = pgTable("transactions", {
   type: text("type").notNull(), 
   amount: numeric("amount").notNull(),
   categoryId: integer("category_id").references(() => categories.id),
-  paymentMethodId: integer("payment_method_id").references(() => paymentMethods.id),
+  paymentMethodId: uuid("payment_method_id").references(() => paymentMethods.id), // Changed to UUID
   description: text("description").notNull(),
   transactionDate: timestamp("transaction_date").notNull().defaultNow(),
   receiptUrl: text("receipt_url"),
@@ -46,6 +47,7 @@ export const transactions = pgTable("transactions", {
   isSplit: boolean("is_split").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
 
 export const budgets = pgTable("budgets", {
   id: serial("id").primaryKey(),
@@ -101,6 +103,20 @@ export const incomeSplitRules = pgTable("income_split_rules", {
   userId: uuid("user_id").notNull(),
   name: text("name").notNull(),
   isActive: boolean("is_active").default(true),
+  // New Allocation Logic Fields
+  isTitheEnabled: boolean("is_tithe_enabled").default(false),
+  tithePercentage: numeric("tithe_percentage").default("10"),
+  tithePaymentMethodId: uuid("tithe_payment_method_id").references(() => paymentMethods.id),
+
+  isSavingsEnabled: boolean("is_savings_enabled").default(false),
+  savingsPercentage: numeric("savings_percentage").default("20"),
+  
+  // Savings Split (Core/Satellite)
+  savingsCorePercentage: numeric("savings_core_percentage").default("90"),
+  savingsSatellitePercentage: numeric("savings_satellite_percentage").default("10"),
+  
+  savingsCorePaymentMethodId: uuid("savings_core_payment_method_id").references(() => paymentMethods.id),
+  savingsSatellitePaymentMethodId: uuid("savings_satellite_payment_method_id").references(() => paymentMethods.id),
 });
 
 export const incomeSplitAllocations = pgTable("income_split_allocations", {

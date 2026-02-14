@@ -21,8 +21,8 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { z } from "zod";
-import { Switch } from "@/components/ui/switch"; 
-import { Checkbox } from "@/components/ui/checkbox"; 
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 // Robust Schema for String-to-Number Coercion
@@ -31,7 +31,7 @@ const formSchema = insertTransactionSchema
   .extend({
     amount: z.string().refine((val) => !isNaN(Number(val)) && Number(val) > 0, "Amount must be a positive number"),
     transactionDate: z.coerce.date(),
-    categoryId: z.string().min(1, "Category is required"), 
+    categoryId: z.string().min(1, "Category is required"),
     paymentMethodId: z.string().min(1, "Payment method is required"),
     frequency: z.string().optional(),
     startDate: z.string().optional(),
@@ -45,15 +45,15 @@ const formSchema = insertTransactionSchema
 export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   // Hooks
   const createTx = useCreateTransaction();
-  const createRecurring = useCreateRecurringTransaction(); 
+  const createRecurring = useCreateRecurringTransaction();
   const { data: budgetProgress } = useBudgetsProgress(); // Fetch budgets
-  
+
   const { data: categories } = useCategories();
   const { data: paymentMethods } = usePaymentMethods();
-  
+
   const [activeTab, setActiveTab] = useState("expense");
   const [isUploading, setIsUploading] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
@@ -90,8 +90,8 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
   const splitMode = form.watch("splitMode");
 
   const friendsTotal = participants.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-  
-  const userShare = splitMode === "total" 
+
+  const userShare = splitMode === "total"
     ? Math.max(0, amountValue - friendsTotal)
     : amountValue;
 
@@ -105,7 +105,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
     onDrop: async (acceptedFiles) => {
       if (acceptedFiles.length === 0) return;
       const file = acceptedFiles[0];
-      
+
       try {
         setIsUploading(true);
         setIsScanning(true);
@@ -116,15 +116,15 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
           .upload(fileName, file);
 
         if (uploadError) throw uploadError;
-        
+
         const { data: { publicUrl } } = supabase.storage
           .from('transaction-attachments')
           .getPublicUrl(fileName);
-        
+
         form.setValue("receiptUrl", publicUrl);
 
-        const WEBHOOK_URL = import.meta.env.VITE_OCR_WEBHOOK_URL; 
-        
+        const WEBHOOK_URL = import.meta.env.VITE_OCR_WEBHOOK_URL;
+
         const formData = new FormData();
         formData.append('data', file);
         formData.append('user_id', user?.id || '');
@@ -133,13 +133,13 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
           method: 'POST',
           body: formData,
         });
-        
+
         if (response.ok) {
           const res = await response.json();
           if (res.success && res.data) {
             const extracted = res.data;
-            
-            const setField = (field: any, value: any) => 
+
+            const setField = (field: any, value: any) =>
               form.setValue(field, value, { shouldValidate: true, shouldDirty: true });
 
             if (extracted.total) setField("amount", String(extracted.total));
@@ -153,7 +153,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                 const lowerName = c.name.toLowerCase();
                 return lowerName.includes(lowerExtracted) || lowerExtracted.includes(lowerName);
               });
-              
+
               if (matchedCat) {
                 setField("categoryId", matchedCat.id.toString());
                 if (matchedCat.type !== activeTab) {
@@ -170,7 +170,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                 const lowerName = pm.name.toLowerCase();
                 return lowerName.includes(lowerExtracted) || lowerExtracted.includes(lowerName);
               });
-              
+
               if (matchedPm) setField("paymentMethodId", matchedPm.id.toString());
             }
 
@@ -191,8 +191,8 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
 
   const onSubmit = (data: any) => {
     // Determine the final "expense" amount to record for the user
-    const finalUserAmount = splitMode === "total" 
-      ? (Number(data.amount) - friendsTotal) 
+    const finalUserAmount = splitMode === "total"
+      ? (Number(data.amount) - friendsTotal)
       : Number(data.amount);
 
     if (finalUserAmount < 0) {
@@ -203,7 +203,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
     // === BUDGET LIMIT CHECK ===
     if (activeTab === 'expense' && budgetProgress) {
       const budget = budgetProgress.find(b => b.categoryId === Number(data.categoryId));
-      
+
       if (budget) {
         const currentSpent = Number(budget.spent);
         const limit = Number(budget.amount);
@@ -214,7 +214,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
           const confirmOverBudget = window.confirm(
             `⚠️ Budget Warning!\n\nThis transaction will exceed your budget for ${budget.category?.name}.\n\nBudget: Rp ${limit.toLocaleString()}\nTotal after this: Rp ${newTotal.toLocaleString()}\n\nDo you want to proceed?`
           );
-          
+
           if (!confirmOverBudget) {
             return; // Cancel submission
           }
@@ -225,7 +225,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
     // 1. Common Data Preparation
     const basePayload = {
       categoryId: Number(data.categoryId),
-      paymentMethodId: Number(data.paymentMethodId),
+      paymentMethodId: data.paymentMethodId, // UUID
       description: data.description,
       notes: data.notes,
       receiptUrl: data.receiptUrl,
@@ -271,7 +271,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
       // === BRANCH B: ONE-TIME TRANSACTION ===
       const transactionPayload = {
         ...basePayload,
-        transactionDate: data.transactionDate.toISOString(), 
+        transactionDate: data.transactionDate.toISOString(),
         isSplit: data.isSplit
       };
 
@@ -390,7 +390,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                       <FormItem>
                         <FormLabel>Start Date</FormLabel>
                         <FormControl>
-                           <Input type="date" {...field} />
+                          <Input type="date" {...field} />
                         </FormControl>
                       </FormItem>
                     )}
@@ -405,9 +405,9 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
                     <FormItem>
                       <FormLabel>Date</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="date" 
-                          {...field} 
+                        <Input
+                          type="date"
+                          {...field}
                           value={field.value instanceof Date ? field.value.toISOString().split('T')[0] : field.value}
                         />
                       </FormControl>
@@ -509,7 +509,7 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
               {/* Show Friends Input only if isSplit is checked */}
               {form.watch("isSplit") && (
                 <div className="space-y-4 border p-4 rounded-md bg-muted/20 animate-in fade-in slide-in-from-top-2">
-                  
+
                   {/* Mode Toggle */}
                   <FormField
                     control={form.control}
@@ -602,8 +602,8 @@ export function TransactionModal({ open, onOpenChange }: { open: boolean; onOpen
               />
 
               <div className="pt-4">
-                <Button 
-                  type="submit" 
+                <Button
+                  type="submit"
                   className="w-full h-12 text-base font-bold bg-primary text-primary-foreground hover:bg-primary/90"
                   disabled={createTx.isPending || createRecurring.isPending || isUploading || isScanning}
                 >
